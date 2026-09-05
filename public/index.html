@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SABELO - Trivia en Vivo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- VISTA 1: INICIO -->
+        <div id="vista-inicio" class="card">
+            <h1 class="logo-title">🧠 SABELO ⚡</h1>
+            <p class="subtitle">Trivia interactiva en red local y online</p>
+            
+            <div class="form-group">
+                <input type="text" id="input-nombre" placeholder="Tu apodo o nombre..." maxlength="15">
+            </div>
+
+            <div class="form-group role-selector">
+                <label><input type="radio" name="rol" value="jugador" checked> Participar como Jugador</label>
+                <label><input type="radio" name="rol" value="espectador"> Modo Espectador (TV / Pantalla)</label>
+            </div>
+
+            <div class="button-group">
+                <button id="btn-crear" class="btn primary">Crear Sala</button>
+                <div class="join-box">
+                    <input type="text" id="input-codigo" placeholder="CÓDIGO" maxlength="5">
+                    <button id="btn-unirse" class="btn secondary">Unirse</button>
+                </div>
+            </div>
+            <p id="error-msg" class="error"></p>
+        </div>
+
+        <!-- VISTA 2: LOBBY -->
+        <div id="vista-lobby" class="card hidden">
+            <h2>Sala de Espera</h2>
+            <div class="code-box">Código: <span id="span-codigo" class="badge"></span></div>
+            
+            <div class="lobby-grid">
+                <div>
+                    <h3>🎮 Jugadores (<span id="count-jugadores">0</span>)</h3>
+                    <ul id="lista-jugadores" class="list-box"></ul>
+                </div>
+                <div>
+                    <h3>📺 Espectadores (<span id="count-espectadores">0</span>)</h3>
+                    <ul id="lista-espectadores" class="list-box"></ul>
+                </div>
+            </div>
+
+            <button id="btn-iniciar" class="btn primary hidden">¡Comenzar Partida!</button>
+            <p id="esperando-texto" class="info">Esperando al anfitrión para iniciar...</p>
+        </div>
+
+        <!-- VISTA 3: JUEGO -->
+        <div id="vista-juego" class="card game-card hidden">
+            <div class="game-header">
+                <span id="badge-categoria" class="tag-categoria">Categoría</span>
+                <div class="game-info-right">
+                    <span id="info-ronda" class="round-badge">Ronda 1/8</span>
+                    <span id="temporizador" class="timer">12s</span>
+                </div>
+            </div>
+            
+            <h2 id="texto-pregunta" class="question-text">Cargando pregunta...</h2>
+            <div class="options-grid" id="grid-opciones"></div>
+            <div id="feedback-respuesta" class="feedback-msg hidden"></div>
+
+            <div class="scoreboard-container">
+                <h4>🏆 Tabla de Posiciones en Vivo</h4>
+                <ul id="lista-puntajes-vivo" class="score-list"></ul>
+            </div>
+            <button id="btn-siguiente-ronda" class="btn primary hidden" style="margin-top: 15px;">Siguiente Pregunta ➡️</button>
+        </div>
+
+        <!-- VISTA 4: RESULTADOS -->
+        <div id="vista-resultados" class="card hidden">
+            <h2>🏆 ¡FIN DEL JUEGO! 🏆</h2>
+            <p>El podio definitivo:</p>
+            <ol id="lista-podio" class="podium-list"></ol>
+            <button onclick="location.reload()" class="btn primary">Volver al Inicio</button>
+        </div>
+    </div>
+
+    <!-- Socket.io cliente automático servido por Express -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>

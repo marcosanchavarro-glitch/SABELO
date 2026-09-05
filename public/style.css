@@ -1,0 +1,56 @@
+:root {
+    --bg-color: #090d16;
+    --card-bg: #131c31;
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --secondary: #10b981;
+    --accent: #f59e0b;
+    --text-color: #f8fafc;
+    --text-muted: #94a3b8;
+    --danger: #ef4444;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+body { background-color: var(--bg-color); color: var(--text-color); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
+.app-container { width: 100%; max-width: 650px; }
+.card { background-color: var(--card-bg); border-radius: 20px; padding: 35px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); text-align: center; }
+.logo-title { font-size: 2.5rem; font-weight: 800; margin-bottom: 5px; background: linear-gradient(135deg, #818cf8, #c084fc); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { color: var(--text-muted); margin-bottom: 25px; font-size: 0.95rem; }
+.form-group { margin-bottom: 20px; }
+.role-selector { display: flex; justify-content: space-around; background: rgba(0, 0, 0, 0.2); padding: 12px; border-radius: 10px; font-size: 0.9rem; color: var(--text-muted); }
+.role-selector label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+input[type="text"] { width: 100%; padding: 14px 18px; background: #090d16; border: 2px solid #27354f; border-radius: 10px; color: white; font-size: 16px; outline: none; }
+input[type="text"]:focus { border-color: var(--primary); }
+.button-group { display: flex; flex-direction: column; gap: 12px; }
+.join-box { display: flex; gap: 10px; }
+.join-box input { text-transform: uppercase; text-align: center; letter-spacing: 2px; font-weight: bold; }
+.btn { padding: 14px 20px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; transition: transform 0.1s; }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background-color: var(--primary); color: white; }
+.btn.primary:hover { background-color: var(--primary-hover); }
+.btn.secondary { background-color: var(--secondary); color: white; }
+.code-box { margin: 15px 0 25px 0; font-size: 1.1rem; color: var(--text-muted); }
+.badge { background: var(--primary); color: white; padding: 6px 14px; border-radius: 8px; font-weight: bold; letter-spacing: 2px; }
+.lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left; margin-bottom: 25px; }
+.list-box { background: #090d16; border-radius: 10px; padding: 12px; min-height: 120px; max-height: 180px; overflow-y: auto; list-style: none; font-size: 0.9rem; }
+.list-box li { padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.hidden { display: none !important; }
+.error { color: var(--danger); font-size: 14px; margin-top: 12px; }
+.game-card { max-width: 750px; }
+.game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.tag-categoria { background: var(--accent); color: #000; padding: 5px 12px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; }
+.game-info-right { display: flex; gap: 10px; align-items: center; }
+.round-badge { color: var(--text-muted); font-weight: 600; font-size: 0.9rem; }
+.timer { background: var(--danger); color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+.question-text { font-size: 1.4rem; margin-bottom: 25px; line-height: 1.4; }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+.btn-opcion { background: #1e293b; color: white; border: 2px solid #334155; padding: 18px; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-opcion:hover:not(:disabled) { background: #27354f; border-color: var(--primary); }
+.btn-opcion:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-opcion.seleccionada { background: var(--primary); border-color: white; }
+.feedback-msg { margin: 15px 0; font-weight: bold; font-size: 1.1rem; }
+.scoreboard-container { background: #090d16; border-radius: 12px; padding: 15px; text-align: left; margin-top: 20px; }
+.scoreboard-container h4 { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px; }
+.score-list { list-style: none; max-height: 140px; overflow-y: auto; }
+.score-list li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.95rem; }
+.podium-list { text-align: left; margin: 25px auto; max-width: 400px; padding-left: 20px; font-size: 1.2rem; font-weight: bold; }
