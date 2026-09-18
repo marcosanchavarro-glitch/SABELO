@@ -3,86 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SABELO - Trivia en Vivo</title>
+    <title>SABELO - Trivia Interactiva</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- VISTA 1: INICIO -->
-        <div id="vista-inicio" class="card">
-            <h1 class="logo-title">🧠 SABELO ⚡</h1>
-            <p class="subtitle">Trivia interactiva en red local y online</p>
+
+    <div class="container">
+        <!-- CABECERA GENERAL -->
+        <header>
+            <h1>SABELO 📺</h1>
+            <div class="user-info" id="header-user-info" style="display: none;">
+                <span>👤 <strong id="lbl-username">Jugador</strong></span>
+                <span>🏷️ <strong id="lbl-role">Jugador</strong></span>
+                <span>🔑 <strong id="lbl-room">SALA</strong></span>
+                <div class="score-board">Tus puntos: <span id="current-score">0</span></div>
+            </div>
+        </header>
+
+        <!-- PANTALLA 1: INGRESO DE IDENTIDAD Y ROL -->
+        <div id="screen-identity" class="screen active">
+            <h2 style="font-size: 1.3rem; margin-bottom: 5px;">Bienvenido al Concurso</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px;">Ingresá tu nombre y elegí cómo querés participar en la sala.</p>
             
             <div class="form-group">
-                <input type="text" id="input-nombre" placeholder="Tu apodo o nombre..." maxlength="15">
+                <label>Tu Nombre / Alias</label>
+                <input type="text" id="input-name" placeholder="Ej. Carlos G." maxlength="20">
             </div>
 
-            <div class="form-group role-selector">
-                <label><input type="radio" name="rol" value="jugador" checked> Participar como Jugador</label>
-                <label><input type="radio" name="rol" value="espectador"> Modo Espectador (TV / Pantalla)</label>
-            </div>
-
-            <div class="button-group">
-                <button id="btn-crear" class="btn primary">Crear Sala</button>
-                <div class="join-box">
-                    <input type="text" id="input-codigo" placeholder="CÓDIGO" maxlength="5">
-                    <button id="btn-unirse" class="btn secondary">Unirse</button>
+            <div class="form-group">
+                <label>Rol en la Partida</label>
+                <div class="mode-selection" style="grid-template-columns: 1fr 1fr;">
+                    <button type="button" class="btn-mode active-role" id="btn-role-player" onclick="seleccionarRol('jugador')">
+                        <h3>🎮 Jugador</h3>
+                        <p>Participa respondiendo y acumulando puntos.</p>
+                    </button>
+                    <button type="button" class="btn-mode" id="btn-role-spectator" onclick="seleccionarRol('espectador')">
+                        <h3>👁️ Espectador</h3>
+                        <p>Sigue las alternativas y puntajes en tiempo real.</p>
+                    </button>
                 </div>
             </div>
-            <p id="error-msg" class="error"></p>
+
+            <button class="btn-primary" onclick="irASala()">Siguiente</button>
         </div>
 
-        <!-- VISTA 2: LOBBY -->
-        <div id="vista-lobby" class="card hidden">
-            <h2>Sala de Espera</h2>
-            <div class="code-box">Código: <span id="span-codigo" class="badge"></span></div>
-            
-            <div class="lobby-grid">
+        <!-- PANTALLA 2: GESTIÓN DE SALA -->
+        <div id="screen-room" class="screen">
+            <h2 style="font-size: 1.3rem; margin-bottom: 5px;">Gestión de Sala</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px;">Creá una sala nueva (serás el anfitrión con control total de las categorías) o unite a una existente.</p>
+
+            <div class="mode-selection" style="margin-bottom: 25px;">
+                <button id="create-room-option" type="button" class="btn-mode" onclick="mostrarOpcionSala('crear')">
+                    <h3>➕ Crear Sala</h3>
+                    <p>Sé el anfitrión y controlá la elección de categorías.</p>
+                </button>
+                <button type="button" class="btn-mode" onclick="mostrarOpcionSala('unirse')">
+                    <h3>🔗 Unirse a Sala</h3>
+                    <p>Ingresá con el código provisto por el anfitrión.</p>
+                </button>
+            </div>
+
+            <div id="room-action-container" style="display: none; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label id="room-input-label">Código de Sala</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="input-room" placeholder="Ej. SABELO-1234" maxlength="15" style="text-transform: uppercase;">
+                        <button type="button" id="btn-room-action" class="btn-primary" style="margin-top: 0; width: 140px;" onclick="procesarIngresoSala()">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <button class="btn-secondary" onclick="cambiarPantalla('screen-identity')">← Volver</button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 3: SELECCIÓN DE LAS 9 CATEGORÍAS PRINCIPALES -->
+        <div id="screen-categories" class="screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <h3>🎮 Jugadores (<span id="count-jugadores">0</span>)</h3>
-                    <ul id="lista-jugadores" class="list-box"></ul>
+                    <h2 style="font-size: 1.2rem; color: var(--accent);">Categorías Principales</h2>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Seleccioná un bloque temático para ver sus subcategorías.</p>
                 </div>
+                <button class="btn-secondary" onclick="cambiarPantalla('screen-room')">Cambiar Sala</button>
+            </div>
+
+            <div class="categories-grid" id="main-categories-container"></div>
+        </div>
+
+        <!-- PANTALLA 4: TABLERO DE LAS 6 SUBCATEGORÍAS Y PUNTUACIÓN (100 a 500) -->
+        <div id="screen-subcategories" class="screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <h3>📺 Espectadores (<span id="count-espectadores">0</span>)</h3>
-                    <ul id="lista-espectadores" class="list-box"></ul>
+                    <h2 id="active-category-title" style="font-size: 1.1rem; color: var(--accent);">Categoría</h2>
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">Elegí una subcategoría y su nivel de puntos:</p>
                 </div>
+                <button class="btn-secondary" onclick="volverACategorias()">← Volver a Categorías</button>
             </div>
 
-            <button id="btn-iniciar" class="btn primary hidden">¡Comenzar Partida!</button>
-            <p id="esperando-texto" class="info">Esperando al anfitrión para iniciar...</p>
+            <section class="game-status" aria-live="polite">
+                <div><strong>Turno:</strong> <span id="turn-label">Esperando jugadores</span></div>
+                <div><strong>Espectadores:</strong> <span id="spectators-label">0</span></div>
+                <div id="players-scoreboard" class="players-scoreboard"></div>
+            </section>
+            <div id="subcategories-container"></div>
         </div>
 
-        <!-- VISTA 3: JUEGO -->
-        <div id="vista-juego" class="card game-card hidden">
-            <div class="game-header">
-                <span id="badge-categoria" class="tag-categoria">Categoría</span>
-                <div class="game-info-right">
-                    <span id="info-ronda" class="round-badge">Ronda 1/8</span>
-                    <span id="temporizador" class="timer">12s</span>
-                </div>
+        <!-- PANTALLA 5: PREGUNTA ACTIVA -->
+        <div id="screen-question" class="screen">
+            <div class="question-meta">
+                <span id="q-category">Subcategoría</span>
+                <span id="q-points" style="color: var(--accent); font-weight: bold;">Valor: 0 pts</span>
             </div>
-            
-            <h2 id="texto-pregunta" class="question-text">Cargando pregunta...</h2>
-            <div class="options-grid" id="grid-opciones"></div>
-            <div id="feedback-respuesta" class="feedback-msg hidden"></div>
-
-            <div class="scoreboard-container">
-                <h4>🏆 Tabla de Posiciones en Vivo</h4>
-                <ul id="lista-puntajes-vivo" class="score-list"></ul>
-            </div>
-            <button id="btn-siguiente-ronda" class="btn primary hidden" style="margin-top: 15px;">Siguiente Pregunta ➡️</button>
+            <div id="timer" class="timer">Tiempo: 01:00</div>
+            <p id="question-turn-message" class="question-turn-message"></p>
+            <div class="question-text" id="q-text">Cargando pregunta...</div>
+            <div class="options-list" id="options-container"></div>
         </div>
 
-        <!-- VISTA 4: RESULTADOS -->
-        <div id="vista-resultados" class="card hidden">
-            <h2>🏆 ¡FIN DEL JUEGO! 🏆</h2>
-            <p>El podio definitivo:</p>
-            <ol id="lista-podio" class="podium-list"></ol>
-            <button onclick="location.reload()" class="btn primary">Volver al Inicio</button>
+        <!-- PANTALLA 6: FIN DE PARTIDA / BLOQUE -->
+        <div id="screen-gameover" class="screen">
+            <div class="game-over-box">
+                <h2 style="font-size: 2rem; margin-bottom: 15px;">🏁 ¡Desafío Completado!</h2>
+                <p id="final-message" style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 25px;">Repasaste las preguntas de este bloque.</p>
+                <button class="btn-primary" onclick="reiniciarJuegoCompleto()">Elegir Otra Categoría</button>
+            </div>
         </div>
     </div>
 
-    <!-- Socket.io cliente automático servido por Express -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>
