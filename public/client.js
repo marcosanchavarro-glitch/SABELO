@@ -811,6 +811,8 @@ const socket = io();
 let roomState = null;
 let roomAction = 'unirse';
 let timerInterval = null;
+let answerTransition = false;
+let pendingQuestionPayload = null;
 
 function notifyError(message) { alert(message); }
 function escapeHtml(text) {
@@ -864,11 +866,15 @@ socket.on('room:state', state => { roomState = state; renderFromState(); });
 socket.on('question:opened', payload => { renderQuestion(payload); });
 socket.on('question:closed', () => { /* el estado actualizado habilita el próximo turno */ });
 socket.on('answer:result', result => showAnswerResult(result));
+socket.on('question:passed', payload => { pendingQuestionPayload = payload; });
+socket.on('game:finished', () => { if (!answerTransition) renderPodium(); });
 
 function renderFromState() {
     if (!roomState) return;
     const me = roomState.players.find(player => player.id === socket.id);
     document.getElementById('current-score').textContent = me ? me.score : '—';
+    if (answerTransition) return;
+    if (roomState.matchStatus === 'finished') return renderPodium();
     if (roomState.categoryKey) renderBoard(); else renderCategories();
     if (roomState.activeQuestion && document.getElementById('screen-question').classList.contains('active')) {
         startTimer(roomState.activeQuestion.endsAt);
@@ -895,6 +901,8 @@ function renderCategories() {
 function renderBoard() {
     const category = dbTrivia[roomState.categoryKey];
     document.getElementById('active-category-title').textContent = category.title;
+    const exitButton = document.getElementById('btn-exit-match');
+    exitButton.style.display = gameState.isHost ? '' : 'none';
     const turnPlayer = roomState.players.find(player => player.id === roomState.turnPlayerId);
     document.getElementById('turn-label').textContent = turnPlayer ? `${turnPlayer.name}${turnPlayer.id === socket.id ? ' (vos)' : ''}` : 'Sin jugadores';
     document.getElementById('spectators-label').textContent = roomState.spectators.length ? roomState.spectators.join(', ') : 'Ninguno';
@@ -954,5 +962,34 @@ function showAnswerResult(result) {
     buttons.forEach((button, index) => { button.disabled = true; if (index === result.correctIndex) button.classList.add('correct'); else if (index === result.answer) button.classList.add('incorrect'); });
     document.getElementById('question-turn-message').textContent = `${result.playerName}: ${result.correct ? '¡respuesta correcta!' : 'respuesta incorrecta.'}`;
     clearInterval(timerInterval);
-    setTimeout(() => { if (roomState?.categoryKey) renderBoard(); }, 1700);
+    answerTransition = true;
+    setTimeout(() => {
+        answerTransition = false;
+        if (pendingQuestionPayload) {
+            const payload = pendingQuestionPayload; pendingQuestionPayload = null; renderQuestion(payload);
+        } else if (roomState?.matchStatus === 'finished') {
+            renderPodium();
+        } else if (roomState?.categoryKey) {
+            renderBoard();
+        }
+    }, 1700);
+}
+
+function renderPodium() {
+    if (!roomState) return;
+    clearInterval(timerInterval);
+    const leaders = [...roomState.players].sort((a, b) => b.score - a.score).slice(0, 3);
+    const places = ['🥇', '🥈', '🥉'];
+    document.getElementById('final-message').innerHTML = `<strong>Podio de ${dbTrivia[roomState.categoryKey].title}</strong><br><br>${leaders.length ? leaders.map((player, index) => `${places[index]} ${escapeHtml(player.name)} — ${player.score} pts`).join('<br>') : 'No hubo jugadores en la partida.'}`;
+    const resetButton = document.querySelector('#screen-gameover .btn-primary');
+    resetButton.style.display = gameState.isHost ? '' : 'none';
+    cambiarPantalla('screen-gameover');
+}
+
+function volverACategorias() {
+    socket.emit('match:reset', {}, response => response?.error && notifyError(response.error));
+}
+
+function reiniciarJuegoCompleto() {
+    socket.emit('match:reset', {}, response => response?.error && notifyError(response.error));
 }
