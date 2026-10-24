@@ -81,6 +81,8 @@ input:disabled { opacity: .65; }
 .room-screen > .mode-selection { grid-template-columns: repeat(2, 1fr); }
 
 .categories-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.screen-heading-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 15px; }
+.screen-heading-row > div { min-width: 0; }
 .category-card { min-height: 150px; padding: 20px; position: relative; color: var(--text-main); text-align: left; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; overflow: hidden; }
 .category-icon { position: absolute; display: grid; place-items: center; width: 58px; height: 58px; right: 16px; top: 16px; color: var(--accent); opacity: .78; }
 .category-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -150,7 +152,12 @@ input:disabled { opacity: .65; }
   .room-screen > .mode-selection, .options-list { grid-template-columns: 1fr; }
   .mode-selection[style] { grid-template-columns: 1fr !important; }
   .categories-grid { grid-template-columns: 1fr; }
-  .category-card { min-height: 126px; }
+  .screen-heading-row { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .screen-heading-row .btn-secondary { width: 100%; }
+  .category-card { min-height: 118px; padding: 17px 16px; }
+  .category-icon { width: 46px; height: 46px; right: 14px; top: 14px; }
+  .category-card h3 { padding-right: 50px; font-size: clamp(1rem, 5.2vw, 1.16rem); }
+  .category-card p { margin-top: 14px; font-size: .8rem; padding-right: 42px; }
   .game-status { grid-template-columns: 1fr; gap: 8px; }
   .question-meta { align-items: flex-start; flex-direction: column; }
   .broadcast-topline { align-items: flex-start; flex-direction: column; }

@@ -41,6 +41,19 @@ function sameSession(left, right) {
     && left.participantId === right.participantId
     && left.reconnectToken === right.reconnectToken);
 }
+function savedParticipantId() { return session()?.participantId || null; }
+function syncIdentityFromState(participantId = savedParticipantId()) {
+  if (!roomState || !participantId) return;
+  const participant = roomState.players.find(player => player.id === participantId)
+    || roomState.spectators.find(item => item.id === participantId);
+  isHost = Boolean(participant && roomState.hostId === participantId);
+  if (participant) {
+    playerName = participant.name;
+    document.body.dataset.role = participant.role || '';
+    document.getElementById('lbl-username').textContent = participant.name;
+  }
+  document.getElementById('lbl-role').textContent = isHost ? 'Anfitrión' : (participant?.role === 'espectador' ? 'Espectador' : 'Jugador');
+}
 
 function seleccionarRol(role) {
   playerRole = role;
@@ -73,15 +86,10 @@ function mostrarOpcionSala(action) {
 function acceptRoom(response, code, requestId) {
   if (requestId !== identityRequest) return;
   if (response.error) return notifyError(response.error);
-  isHost = Boolean(response.isHost);
   roomState = response.state;
   const actualCode = response.state?.code || code;
   saveSession({ code: actualCode, participantId: response.participantId, reconnectToken: response.reconnectToken });
-  const participant = roomState.players.find(player => player.id === response.participantId) || roomState.spectators.find(item => item.id === response.participantId);
-  if (participant) playerName = participant.name;
-  document.body.dataset.role = participant?.role || '';
-  document.getElementById('lbl-username').textContent = playerName;
-  document.getElementById('lbl-role').textContent = isHost ? 'Anfitrión' : (participant ? (participant.role === 'espectador' ? 'Espectador' : 'Jugador') : 'Participante');
+  syncIdentityFromState(response.participantId);
   document.getElementById('lbl-room').textContent = actualCode;
   document.getElementById('header-user-info').style.display = 'flex';
   renderState();
@@ -110,7 +118,13 @@ function restoreSession() {
 }
 
 socket.on('connect', restoreSession);
-socket.on('room:state', state => { roomState = state; renderState(); });
+socket.on('room:state', state => {
+  // Un evento de una sala anterior nunca puede conservar permisos visuales.
+  if (!sameSession(session(), { ...session(), code: state.code })) return;
+  roomState = state;
+  syncIdentityFromState();
+  renderState();
+});
 socket.on('question:opened', renderQuestion);
 socket.on('question:passed', payload => { pendingQuestion = payload; });
 socket.on('answer:result', showAnswerResult);
@@ -149,7 +163,7 @@ function renderCategories() {
     const card = document.createElement('button'); card.className = 'category-card';
     card.innerHTML = `<span class="category-icon">${categoryIcons[key] || categoryIcons.random}</span><h3>${escapeHtml(displayTitle(category.title))}</h3><p>Subcategorías · tablero de puntajes</p>`;
     card.disabled = !isHost;
-    card.onclick = () => socket.emit('category:select', { categoryKey: key }, reportError);
+    card.onclick = () => selectCategory(key);
     container.append(card);
   });
   if (isHost) {
@@ -161,6 +175,16 @@ function renderCategories() {
     practice.onclick = () => abrirConfiguracionDuelo(true); container.append(practice);
   }
   changeScreen('screen-categories');
+}
+function selectCategory(categoryKey) {
+  if (!isHost) return notifyError('Esperando la confirmación de tu sesión de anfitrión. Actualizá la página si el problema continúa.');
+  socket.emit('category:select', { categoryKey }, response => {
+    if (!response?.error) return;
+    // Safari y navegadores integrados pueden reconectar el socket sin recargar
+    // la vista. Reautenticar el token vigente devuelve la identidad al socket.
+    if (response.error === 'Solo el anfitrión puede elegir una categoría disponible.') return restoreSession();
+    reportError(response);
+  });
 }
 
 function integrantesPorEquipo() {
