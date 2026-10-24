@@ -626,6 +626,7 @@ function renderTutorialWaiting() {
     : `Práctica ${tutorial.completed} de ${tutorial.total} completada. El anfitrión decide cuándo continúa el siguiente turno.`;
   const button = document.getElementById('tutorial-action'); button.hidden = !isHost;
   button.textContent = complete ? 'Iniciar competencia oficial' : 'Continuar práctica';
+  updateTeamEndControls();
   changeScreen('screen-tutorial');
 }
 function avanzarTutorial() {
@@ -666,6 +667,19 @@ function startTimer(endsAt, targetId = 'timer') {
 }
 
 function participantName(id) { return roomState.players.find(player => player.id === id)?.name || 'Participante'; }
+function updateTeamEndControls() {
+  const available = Boolean(isHost && roomState?.mode === 'teams' && roomState.teamDuel && roomState.teamDuel.status !== 'finished');
+  document.querySelectorAll('[data-team-end-match]').forEach(button => { button.hidden = !available; });
+}
+function finalizarPartidaEquipos() {
+  if (!isHost || !roomState?.teamDuel) return;
+  const button = document.querySelector('[data-team-end-match]:not([hidden])');
+  sendAction('match:reset', {}, {
+    label: 'Finalizando partida…', button,
+    onSuccess: () => {},
+    onError: reportError
+  });
+}
 function renderTeamTurn() {
   const payload = currentTeamQuestion; const duel = roomState?.teamDuel || payload?.duel;
   if (!payload || !duel || !['playing', 'tutorial'].includes(duel.status)) return;
@@ -681,6 +695,7 @@ function renderTeamTurn() {
   document.getElementById('team-q-text').textContent = payload.question.q;
   const options = document.getElementById('team-options-container'); options.replaceChildren();
   payload.question.options.forEach((option, answer) => { const button = document.createElement('button'); button.className = 'option-btn'; button.textContent = option; button.disabled = !mine; button.onclick = () => socket.emit('team:answer', { answer, questionId: active.id }, reportError); options.append(button); });
+  updateTeamEndControls();
   startTimer(active.endsAt, 'team-timer'); changeScreen('screen-team-question');
 }
 function showTeamResult(result) {

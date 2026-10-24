@@ -42,6 +42,9 @@ test('el cliente contiene la creación por modalidad, elección voluntaria de ba
   assert.match(client, /team:assign/);
   assert.match(client, /screen-team-final/);
   assert.match(client, /screen-podium/);
+  assert.match(html, /data-team-end-match/);
+  assert.match(client, /function finalizarPartidaEquipos\(\)[\s\S]*?sendAction\('match:reset'/);
+  assert.match(client, /function updateTeamEndControls\(\)/);
   assert.match(html, /Elegí tu bando/);
   assert.match(html, /Unirme a Chicos/);
   assert.match(html, /Unirme a Chicas/);
