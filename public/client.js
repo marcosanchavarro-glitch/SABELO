@@ -9,6 +9,10 @@ let isHost = false;
 let transitionPending = false;
 let pendingQuestion = null;
 let timerInterval = null;
+let currentTeamQuestion = null;
+let teamSetupIsTest = false;
+let reboundNotice = false;
+let currentQuestionId = null;
 
 function changeScreen(id) {
   document.querySelectorAll('.screen').forEach(screen => screen.classList.toggle('active', screen.id === id));
@@ -80,6 +84,10 @@ socket.on('question:opened', renderQuestion);
 socket.on('question:passed', payload => { pendingQuestion = payload; });
 socket.on('answer:result', showAnswerResult);
 socket.on('game:finished', () => { if (!transitionPending) renderPodium(); });
+socket.on('team:turn', payload => { currentTeamQuestion = payload; if (!transitionPending) renderTeamTurn(); });
+socket.on('team:result', result => showTeamResult(result));
+socket.on('team:finished', duel => renderTeamFinished(duel));
+socket.on('tutorial:step-complete', () => { /* el estado público siguiente determina la pantalla de espera */ });
 
 function ownPlayer() { return roomState?.players.find(player => player.id === session()?.participantId); }
 function turnPlayer() { return roomState?.players.find(player => player.id === roomState.turnPlayerId); }
@@ -90,6 +98,9 @@ function renderState() {
   const own = ownPlayer();
   document.getElementById('current-score').textContent = own ? own.score : '—';
   if (transitionPending) return;
+  if (roomState.teamDuel?.status === 'tutorial') return roomState.teamDuel.activeTurn ? renderTeamTurn() : renderTutorialWaiting();
+  if (roomState.tutorial) return roomState.activeQuestion ? undefined : renderTutorialWaiting();
+  if (roomState.teamDuel?.status === 'playing') return currentTeamQuestion ? renderTeamTurn() : undefined;
   if (roomState.matchStatus === 'finished') return renderPodium();
   if (!roomState.categoryKey) return renderCategories();
   renderBoard();
@@ -109,7 +120,43 @@ function renderCategories() {
     card.onclick = () => socket.emit('category:select', { categoryKey: key }, reportError);
     container.append(card);
   });
+  if (isHost) {
+    const duel = document.createElement('button'); duel.className = 'category-card';
+    duel.innerHTML = '<h3>⚔️ Duelo de Equipos</h3><p>Trivia bíblica · 10 rondas · 30 segundos por turno</p>';
+    duel.onclick = () => abrirConfiguracionDuelo(false); container.append(duel);
+    const practice = document.createElement('button'); practice.className = 'category-card';
+    practice.innerHTML = '<h3>🧪 Partida de prueba</h3><p>Probá equipos, turnos y sincronización sin historial competitivo.</p>';
+    practice.onclick = () => abrirConfiguracionDuelo(true); container.append(practice);
+  }
   changeScreen('screen-categories');
+}
+
+function integrantesPorEquipo() {
+  const groups = { blue: [], red: [] };
+  roomState.players.forEach((player, index) => groups[index % 2 ? 'red' : 'blue'].push(player));
+  return groups;
+}
+function abrirConfiguracionDuelo(isTest) {
+  if (!isHost) return;
+  if (roomState.players.length < 2) return notifyError('Se requieren al menos dos jugadores para formar los equipos.');
+  teamSetupIsTest = isTest;
+  document.getElementById('team-setup-test-badge').hidden = !isTest;
+  const teams = integrantesPorEquipo();
+  document.getElementById('team-config-note').textContent = `Asignación automática: Azul (${teams.blue.map(p => p.name).join(', ')}) vs. Rojo (${teams.red.map(p => p.name).join(', ')}).`;
+  ['blue', 'red'].forEach(key => {
+    const select = document.getElementById(`${key}-captain`); select.replaceChildren();
+    teams[key].forEach(player => { const option = document.createElement('option'); option.value = player.id; option.textContent = player.name; select.append(option); });
+  });
+  actualizarCapitanes(); changeScreen('screen-team-setup');
+}
+function actualizarCapitanes() {
+  const fixed = document.getElementById('team-response-mode').value === 'captain-fixed';
+  document.getElementById('captains-config').hidden = !fixed;
+}
+function iniciarDueloEquipos() {
+  const responseMode = document.getElementById('team-response-mode').value;
+  const captains = { blue: document.getElementById('blue-captain').value, red: document.getElementById('red-captain').value };
+  socket.emit('team:begin', { responseMode, isTest: teamSetupIsTest, captains }, reportError);
 }
 
 function renderTurnStatus() {
@@ -148,24 +195,47 @@ function renderBoard() {
 }
 
 function renderQuestion(payload) {
-  const category = roomState.catalog[payload.categoryKey]; const subcategory = category.subcategories[payload.subKey];
-  document.getElementById('q-category').textContent = `${category.title} › ${subcategory.title}`;
-  document.getElementById('q-points').textContent = `Valor: ${payload.question.points} pts`;
+  currentQuestionId = payload.id;
+  const isTutorial = payload.tutorial;
+  const category = !isTutorial && roomState.catalog[payload.categoryKey]; const subcategory = category?.subcategories[payload.subKey];
+  document.getElementById('q-category').textContent = isTutorial ? 'RONDA 0 · TUTORIAL' : `${category.title} › ${subcategory.title}`;
+  document.getElementById('q-points').textContent = isTutorial ? 'Práctica · 0 pts' : `Valor: ${payload.question.points} pts`;
   document.getElementById('q-text').textContent = payload.question.q;
   const turn = turnPlayer();
-  document.getElementById('question-turn-message').textContent = isMyTurn() ? '¡ES TU TURNO! Elegí una respuesta antes de que termine el minuto.' : `ES EL TURNO DE ${turn?.name || 'un jugador'}.`;
+  const rebound = reboundNotice ? '¡REBOTE! ' : '';
+  reboundNotice = false;
+  document.getElementById('question-turn-message').textContent = `${rebound}${isMyTurn() ? '¡ES TU TURNO! Elegí una respuesta antes de que termine el minuto.' : `ES EL TURNO DE ${turn?.name || 'un jugador'}.`}`;
   const options = document.getElementById('options-container'); options.replaceChildren();
   payload.question.options.forEach((option, answer) => {
     const button = document.createElement('button'); button.className = 'option-btn'; button.textContent = option; button.disabled = !isMyTurn();
-    button.onclick = () => socket.emit('answer:submit', { answer }, reportError);
+    button.onclick = () => socket.emit('answer:submit', { answer, questionId: currentQuestionId }, reportError);
     options.append(button);
   });
   startTimer(payload.endsAt); changeScreen('screen-question');
 }
 
+function renderTutorialWaiting() {
+  const tutorial = roomState.teamDuel?.tutorial || roomState.tutorial;
+  if (!tutorial) return;
+  const complete = tutorial.status === 'complete';
+  document.getElementById('tutorial-title').textContent = complete ? 'Ronda 0 completada' : 'Práctica guiada';
+  document.getElementById('tutorial-message').textContent = complete
+    ? 'La práctica terminó. El anfitrión puede iniciar la competencia oficial; los marcadores comenzarán en cero.'
+    : `Práctica ${tutorial.completed} de ${tutorial.total} completada. El anfitrión decide cuándo continúa el siguiente turno.`;
+  const button = document.getElementById('tutorial-action'); button.hidden = !isHost;
+  button.textContent = complete ? 'Iniciar competencia oficial' : 'Continuar práctica';
+  changeScreen('screen-tutorial');
+}
+function avanzarTutorial() {
+  const tutorial = roomState?.teamDuel?.tutorial || roomState?.tutorial;
+  socket.emit(tutorial?.status === 'complete' ? 'tutorial:begin-official' : 'tutorial:advance', {}, reportError);
+}
+
 function showAnswerResult(result) {
   document.querySelectorAll('.option-btn').forEach(button => { button.disabled = true; button.classList.remove('correct', 'incorrect'); });
-  document.getElementById('question-turn-message').textContent = `${result.playerName} respondió ${result.correct ? 'correctamente.' : 'incorrectamente.'}`;
+  const message = result.status === 'correct' ? 'respondió correctamente.' : result.status === 'timeout' ? 'agotó el tiempo.' : 'respondió incorrectamente.';
+  document.getElementById('question-turn-message').textContent = `${result.playerName} ${message}`;
+  reboundNotice = result.status !== 'correct';
   clearInterval(timerInterval); transitionPending = true;
   window.setTimeout(() => {
     transitionPending = false;
@@ -174,14 +244,46 @@ function showAnswerResult(result) {
   }, 1200);
 }
 
-function startTimer(endsAt) {
+function startTimer(endsAt, targetId = 'timer') {
   clearInterval(timerInterval);
   const update = () => {
     const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
-    document.getElementById('timer').textContent = `Tiempo: ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    document.getElementById(targetId).textContent = `Tiempo: ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
     if (!seconds) clearInterval(timerInterval);
   };
   update(); timerInterval = window.setInterval(update, 250);
+}
+
+function participantName(id) { return roomState.players.find(player => player.id === id)?.name || 'Participante'; }
+function renderTeamTurn() {
+  const payload = currentTeamQuestion; const duel = roomState?.teamDuel || payload?.duel;
+  if (!payload || !duel || duel.status !== 'playing') return;
+  const active = duel.activeTurn; const teamInfo = duel.teams[active.teamKey]; const responder = participantName(active.responderId);
+  document.getElementById('team-test-badge').hidden = !(duel.isTest || active.tutorial);
+  document.getElementById('team-test-badge').textContent = active.tutorial ? 'RONDA 0 · TUTORIAL' : 'MODO PRUEBA';
+  document.getElementById('team-progress').textContent = active.tutorial ? `Tutorial ${duel.tutorial.completed + 1} de ${duel.tutorial.total}` : `Ronda ${duel.round} de 10 · Turno ${duel.turnNumber + 1} de ${duel.totalTurns}`;
+  document.getElementById('team-active-label').textContent = `${teamInfo.name.toUpperCase()} · ${responder}`;
+  document.getElementById('team-scores').innerHTML = ['blue', 'red'].map(key => `<div class="team-score ${key} ${key === active.teamKey ? 'active' : ''}">${duel.teams[key].name}: ${duel.teams[key].score}</div>`).join('');
+  const mine = session()?.participantId === active.responderId;
+  document.getElementById('team-turn-message').textContent = mine ? '¡ES TU TURNO! Enviá la respuesta del equipo.' : `Turno de ${responder} · ${teamInfo.name}.`;
+  document.getElementById('team-q-text').textContent = payload.question.q;
+  const options = document.getElementById('team-options-container'); options.replaceChildren();
+  payload.question.options.forEach((option, answer) => { const button = document.createElement('button'); button.className = 'option-btn'; button.textContent = option; button.disabled = !mine; button.onclick = () => socket.emit('team:answer', { answer, questionId: active.id }, reportError); options.append(button); });
+  startTimer(active.endsAt, 'team-timer'); changeScreen('screen-team-question');
+}
+function showTeamResult(result) {
+  document.querySelectorAll('#team-options-container .option-btn').forEach(button => { button.disabled = true; });
+  const base = result.status === 'correct' ? 'Respuesta registrada: +100 puntos para el equipo.' : result.status === 'timeout' ? 'Tiempo agotado. Sin puntos.' : 'Respuesta incorrecta. Sin puntos.';
+  document.getElementById('team-turn-message').textContent = result.rebound ? `${base} ¡REBOTE! El otro equipo responde ahora.` : base;
+  clearInterval(timerInterval); transitionPending = true;
+  window.setTimeout(() => { transitionPending = false; if (roomState?.teamDuel?.status === 'playing') renderTeamTurn(); }, 1100);
+}
+function renderTeamFinished(duel) {
+  clearInterval(timerInterval); currentTeamQuestion = null;
+  const blue = duel.teams.blue; const red = duel.teams.red;
+  const text = duel.result.tie ? `Empate: Azul ${blue.score} · Rojo ${red.score}` : `Ganó ${duel.result.winner === 'blue' ? blue.name : red.name}: ${blue.score} · ${red.score}`;
+  document.getElementById('final-message').textContent = `${duel.isTest ? 'MODO PRUEBA · ' : ''}Duelo finalizado. ${text}`;
+  document.querySelector('#screen-gameover .btn-primary').style.display = isHost ? '' : 'none'; changeScreen('screen-gameover');
 }
 
 function renderPodium() {

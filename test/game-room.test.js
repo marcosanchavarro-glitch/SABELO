@@ -20,28 +20,38 @@ test('una respuesta correcta avanza al siguiente jugador', () => {
   const room = roomWithPlayers(2); const a = room.players[0]; const b = room.players[1];
   game.selectQuestion(room, a.id, 'general', 0, trivia, 0);
   const result = game.answer(room, a.id, 0, trivia, 1);
-  assert.equal(result.correct, true); assert.equal(a.score, 100); assert.equal(game.currentPlayer(room).id, b.id);
+  assert.equal(result.result, 'correct'); assert.equal(a.score, 100); assert.equal(game.currentPlayer(room).id, b.id);
 });
 
-test('dos respuestas incorrectas rotan A → B → C y una correcta continúa a D', () => {
+test('dos respuestas incorrectas rebotan A → B → C y el próximo iniciador sigue la rotación base', () => {
   const room = roomWithPlayers(); const [a, b, c, d] = room.players;
   game.selectQuestion(room, a.id, 'general', 0, trivia, 0);
-  assert.equal(game.answer(room, a.id, 1, trivia, 1).passed, true);
+  assert.equal(game.answer(room, a.id, 1, trivia, 1).rebound, true);
   assert.equal(game.currentPlayer(room).id, b.id);
-  assert.equal(game.answer(room, b.id, 1, trivia, 2).passed, true);
+  assert.equal(game.answer(room, b.id, 1, trivia, 2).rebound, true);
   assert.equal(game.currentPlayer(room).id, c.id);
-  assert.equal(game.answer(room, c.id, 0, trivia, 3).correct, true);
-  assert.equal(game.currentPlayer(room).id, d.id);
+  assert.equal(game.answer(room, c.id, 0, trivia, 3).result, 'correct');
+  assert.equal(game.currentPlayer(room).id, b.id);
 });
 
-test('el último jugador vuelve al primero y una respuesta duplicada no avanza dos veces', () => {
+test('todos fallan: la pregunta se cierra y el iniciador siguiente rota de forma independiente', () => {
   const room = roomWithPlayers(2); const [a, b] = room.players;
   game.selectQuestion(room, a.id, 'general', 0, trivia, 0);
   game.answer(room, a.id, 1, trivia, 1);
   const duplicate = game.answer(room, a.id, 1, trivia, 2);
   assert.equal(duplicate.ok, false); assert.equal(game.currentPlayer(room).id, b.id);
-  game.answer(room, b.id, 1, trivia, 3);
-  assert.equal(game.currentPlayer(room).id, a.id);
+  const exhausted = game.answer(room, b.id, 1, trivia, 3);
+  assert.equal(exhausted.exhausted, true); assert.equal(room.activeQuestion, null);
+  assert.equal(game.currentPlayer(room).id, b.id);
+});
+
+test('el tiempo agotado rebota y no permite que el mismo jugador intente dos veces', () => {
+  const room = roomWithPlayers(2); const [a, b] = room.players;
+  game.selectQuestion(room, a.id, 'general', 0, trivia, 0);
+  const outcome = game.timeout(room, trivia, 1);
+  assert.equal(outcome.result, 'timeout'); assert.equal(outcome.rebound, true);
+  assert.equal(game.currentPlayer(room).id, b.id);
+  assert.equal(game.answer(room, a.id, 0, trivia, 2).ok, false);
 });
 
 test('dos solicitudes simultáneas del mismo jugador solo aceptan una transición', async () => {
@@ -67,6 +77,26 @@ test('al finalizar no se generan turnos adicionales', () => {
   game.selectQuestion(room, a.id, 'general', 1, trivia, 2); const result = game.answer(room, a.id, 1, trivia, 3);
   assert.equal(result.finished.finishedGame, true); assert.equal(room.matchStatus, 'finished');
   assert.equal(game.selectQuestion(room, a.id, 'general', 0, trivia, 4), null);
+});
+
+test('la Ronda 0 no suma puntos, permite rebote y exige confirmación para iniciar la partida', () => {
+  const room = roomWithPlayers(2); const [a, b] = room.players;
+  const tutorial = [
+    { points: 0, q: 'Práctica 1', options: ['A', 'B'], correct: 0 },
+    { points: 0, q: 'Práctica 2', options: ['A', 'B'], correct: 1 }
+  ];
+  const first = game.startTutorial(room, tutorial, 0);
+  assert.equal(first.tutorial, true); assert.equal(game.answer(room, a.id, 0, trivia, 1).finished.tutorial, true);
+  assert.equal(a.score, 0); assert.equal(room.tutorial.status, 'awaiting-host');
+  const second = game.advanceTutorial(room, 2);
+  assert.equal(game.currentPlayer(room).id, b.id); assert.equal(second.tutorial, true);
+  assert.equal(game.answer(room, b.id, 0, trivia, 3).rebound, true);
+  assert.equal(game.currentPlayer(room).id, a.id);
+  const done = game.timeout(room, trivia, 4);
+  assert.equal(done.finished.tutorialComplete, true); assert.equal(room.tutorial.status, 'complete');
+  assert.equal(game.selectQuestion(room, a.id, 'general', 0, trivia), null);
+  assert.equal(game.beginOfficialMatch(room), true); assert.equal(room.tutorial, null);
+  assert.equal(a.score + b.score, 0);
 });
 
 module.exports = { trivia };

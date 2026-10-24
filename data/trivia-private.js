@@ -93,7 +93,7 @@ module.exports = {
                     { points: 100, q: "¿En qué ciudad nació Jesús de Nazaret según los relatos evangélicos?", options: ["Nazaret", "Jerusalén", "Belén", "Cafarnaúm"], correct: 2 },
                     { points: 200, q: "¿En qué monte entregó Dios las tablas de la ley (los 10 mandamientos) a Moisés?", options: ["Monte Carmelo", "Monte Sinaí", "Monte de los Olivos", "Monte Nebo"], correct: 1 },
                     { points: 300, q: "¿En qué río fue bautizado Jesús por Juan el Bautista?", options: ["Río Nilo", "Río Éufrates", "Río Jordán", "Río Tigris"], correct: 2 },
-                    { points: 400, q: "¿Cómo se llamaba el jardín donde Jesús pasó sus horas de angustia y oración antes de ser arrestado?", options: ["Edén", "Getsemaní", "Getsemaní", "Getsemaní (Huerto de los Olivos)"], correct: 1 },
+                    { points: 400, q: "¿Cómo se llamaba el jardín donde Jesús pasó sus horas de angustia y oración antes de ser arrestado?", options: ["Edén", "Getsemaní", "Jardín de Jope", "Valle de Cedrón"], correct: 1 },
                     { points: 500, q: "¿A qué isla fue exiliado el apóstol Juan cuando escribió el libro de Apocalipsis?", options: ["Chipre", "Creta", "Patmos", "Malta"], correct: 2 }
                 ]
             },
@@ -125,6 +125,66 @@ module.exports = {
                     { points: 300, q: "¿En qué situación milagrosa fueron librados Sadrac, Mesac y Abed-nego?", options: ["Foso de los leones", "Horno de fuego ardiendo", "Prisión de Filipos", "Tempestad en el mar"], correct: 1 },
                     { points: 400, q: "¿Qué profeta fue alimentado milagrosamente por cuervos junto al arroyo de Querit?", options: ["Elías", "Eliseo", "Amós", "Oseas"], correct: 0 },
                     { points: 500, q: "¿Qué señal celestial apareció en el cielo para guiar a los magos de Oriente hasta el lugar donde estaba Jesús?", options: ["Una lluvia de estrellas", "Una estrella brillante", "Un ángel radiante", "Una columna de fuego"], correct: 1 }
+                ]
+            },
+            patriarcas: {
+                title: "Génesis y patriarcas",
+                questions: [
+                    { id: "bib-031", difficulty: "fácil", reference: "Génesis 12:1-4", points: 100, q: "¿A qué patriarca llamó Dios para salir de su tierra hacia una tierra que le mostraría?", options: ["Abraham", "Isaac", "Jacob", "Job"], correct: 0 },
+                    { id: "bib-032", difficulty: "fácil", reference: "Génesis 21:1-3", points: 200, q: "¿Cómo se llamó el hijo que Sara dio a luz a Abraham en su vejez?", options: ["Ismael", "Isaac", "Esaú", "José"], correct: 1 },
+                    { id: "bib-033", difficulty: "intermedio", reference: "Génesis 28:12-15", points: 300, q: "¿Qué vio Jacob en su sueño en Betel?", options: ["Un arca", "Una escalera que llegaba al cielo", "Un carro de fuego", "Una zarza ardiente"], correct: 1 },
+                    { id: "bib-034", difficulty: "intermedio", reference: "Génesis 37:5-10", points: 400, q: "¿Qué soñó José que provocó el enojo de sus hermanos?", options: ["Que el sol, la luna y estrellas se inclinaban", "Que cruzaba el mar", "Que derrotaba a Goliat", "Que construía un templo"], correct: 0 },
+                    { id: "bib-035", difficulty: "difícil", reference: "Génesis 32:24-30", points: 500, q: "¿Qué nombre recibió Jacob después de luchar durante la noche?", options: ["Israel", "Judá", "Benjamín", "Efraín"], correct: 0 }
+                ]
+            },
+            exodo_ley: {
+                title: "Éxodo y la Ley",
+                questions: [
+                    { id: "bib-036", difficulty: "fácil", reference: "Éxodo 3:2-10", points: 100, q: "¿Desde qué fenómeno habló Dios a Moisés en Horeb?", options: ["Una nube", "Una zarza que ardía", "Un trueno", "Una paloma"], correct: 1 },
+                    { id: "bib-037", difficulty: "fácil", reference: "Éxodo 14:21-22", points: 200, q: "¿Qué masa de agua cruzaron los israelitas al salir de Egipto?", options: ["El Jordán", "El mar Rojo", "El Nilo", "El mar de Galilea"], correct: 1 },
+                    { id: "bib-038", difficulty: "intermedio", reference: "Éxodo 20:1-17", points: 300, q: "¿En qué monte se entregaron los Diez Mandamientos según Éxodo?", options: ["Sinaí", "Carmelo", "Sion", "Tabor"], correct: 0 },
+                    { id: "bib-039", difficulty: "intermedio", reference: "Levítico 19:18", points: 400, q: "¿Qué mandato resume Levítico 19:18 respecto al prójimo?", options: ["Júzgalo con severidad", "Ámalo como a ti mismo", "Evítalo", "Síguelo"], correct: 1 },
+                    { id: "bib-040", difficulty: "difícil", reference: "Números 13:1-3, 17", points: 500, q: "¿Cuántos hombres fueron enviados a explorar Canaán desde el desierto de Parán?", options: ["Dos", "Diez", "Doce", "Setenta"], correct: 2 }
+                ]
+            },
+            israel_reyes: {
+                title: "Historia de Israel",
+                questions: [
+                    { id: "bib-041", difficulty: "fácil", reference: "Rut 1:16", points: 100, q: "¿De qué pueblo era originaria Rut?", options: ["Moab", "Egipto", "Filistea", "Babilonia"], correct: 0 },
+                    { id: "bib-042", difficulty: "fácil", reference: "1 Samuel 16:13", points: 200, q: "¿A quién ungió Samuel como rey en Belén?", options: ["Saúl", "David", "Salomón", "Jonatán"], correct: 1 },
+                    { id: "bib-043", difficulty: "intermedio", reference: "1 Reyes 3:5-12", points: 300, q: "¿Qué pidió Salomón a Dios en Gabaón?", options: ["Riquezas", "Larga vida", "Sabiduría para gobernar", "Victoria militar"], correct: 2 },
+                    { id: "bib-044", difficulty: "intermedio", reference: "1 Reyes 18:20-39", points: 400, q: "¿En qué monte desafió Elías a los profetas de Baal?", options: ["Carmelo", "Sinaí", "Nebo", "Hermón"], correct: 0 },
+                    { id: "bib-045", difficulty: "difícil", reference: "2 Reyes 5:1-14", points: 500, q: "¿En qué río se lavó Naamán siguiendo la instrucción de Eliseo?", options: ["Jordán", "Nilo", "Éufrates", "Quisón"], correct: 0 }
+                ]
+            },
+            sabiduria_profetas: {
+                title: "Sabiduría y profetas",
+                questions: [
+                    { id: "bib-046", difficulty: "fácil", reference: "Proverbios 1:7", points: 100, q: "¿Qué es el principio de la sabiduría según Proverbios 1:7?", options: ["El temor del Señor", "La riqueza", "La fuerza", "El silencio"], correct: 0 },
+                    { id: "bib-047", difficulty: "fácil", reference: "Daniel 6:16-23", points: 200, q: "¿En qué lugar fue arrojado Daniel por seguir orando a Dios?", options: ["Un horno", "Un foso de leones", "Una cisterna", "Una prisión"], correct: 1 },
+                    { id: "bib-048", difficulty: "intermedio", reference: "Jeremías 18:1-6", points: 300, q: "¿Qué oficio observó Jeremías para ilustrar el poder de Dios sobre Israel?", options: ["Carpintero", "Alfarero", "Pescador", "Pastor"], correct: 1 },
+                    { id: "bib-049", difficulty: "intermedio", reference: "Jonás 3:4-10", points: 400, q: "¿A qué ciudad anunció Jonás un mensaje de juicio?", options: ["Nínive", "Jericó", "Damasco", "Tiro"], correct: 0 },
+                    { id: "bib-050", difficulty: "difícil", reference: "Ezequiel 37:1-10", points: 500, q: "¿Qué visión recibió Ezequiel en un valle?", options: ["Huesos secos que volvieron a vivir", "Una escalera al cielo", "Un carro de fuego", "Una gran inundación"], correct: 0 }
+                ]
+            },
+            evangelios_hechos: {
+                title: "Evangelios y Hechos",
+                questions: [
+                    { id: "bib-051", difficulty: "fácil", reference: "Mateo 3:13-17", points: 100, q: "¿Quién bautizó a Jesús en el Jordán?", options: ["Pedro", "Juan el Bautista", "Andrés", "Felipe"], correct: 1 },
+                    { id: "bib-052", difficulty: "fácil", reference: "Lucas 10:30-37", points: 200, q: "¿Qué personaje ayudó al hombre herido en la parábola de Jesús?", options: ["Un fariseo", "Un samaritano", "Un escriba", "Un soldado romano"], correct: 1 },
+                    { id: "bib-053", difficulty: "intermedio", reference: "Mateo 14:13-21", points: 300, q: "¿Cuántos panes se mencionan en la alimentación de los cinco mil?", options: ["Dos", "Cinco", "Siete", "Doce"], correct: 1 },
+                    { id: "bib-054", difficulty: "intermedio", reference: "Hechos 2:1-4", points: 400, q: "¿En qué fiesta ocurrió el derramamiento del Espíritu Santo relatado en Hechos 2?", options: ["Pascua", "Pentecostés", "Tabernáculos", "Expiación"], correct: 1 },
+                    { id: "bib-055", difficulty: "difícil", reference: "Hechos 9:1-19", points: 500, q: "¿En qué camino tuvo Saulo una visión que cambió su vida?", options: ["Camino a Damasco", "Camino a Emaús", "Camino a Jericó", "Camino a Roma"], correct: 0 }
+                ]
+            },
+            cartas_apocalipsis: {
+                title: "Cartas y Apocalipsis",
+                questions: [
+                    { id: "bib-056", difficulty: "fácil", reference: "Gálatas 5:22-23", points: 100, q: "¿Cuál de estas virtudes forma parte del fruto del Espíritu?", options: ["Paciencia", "Venganza", "Orgullo", "Envidia"], correct: 0 },
+                    { id: "bib-057", difficulty: "fácil", reference: "Efesios 6:11-17", points: 200, q: "¿Qué imagen usa Efesios 6 para describir la preparación espiritual?", options: ["La armadura de Dios", "La escalera de Jacob", "El arca de Noé", "El manto de Elías"], correct: 0 },
+                    { id: "bib-058", difficulty: "intermedio", reference: "Santiago 2:17", points: 300, q: "¿Cómo describe Santiago la fe sin obras?", options: ["Perfecta", "Muerta", "Innecesaria", "Oculta"], correct: 1 },
+                    { id: "bib-059", difficulty: "intermedio", reference: "1 Pedro 5:7", points: 400, q: "¿Qué invita a hacer 1 Pedro 5:7 con las preocupaciones?", options: ["Ignorarlas", "Echarlas sobre Dios", "Esconderlas", "Resolverlas solos"], correct: 1 },
+                    { id: "bib-060", difficulty: "difícil", reference: "Apocalipsis 21:1-4", points: 500, q: "¿Qué promete Apocalipsis 21 acerca del futuro?", options: ["Un cielo y una tierra nuevos", "Un nuevo diluvio", "Un tercer templo en Egipto", "La desaparición del sol"], correct: 0 }
                 ]
             }
         }

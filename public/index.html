@@ -91,6 +91,25 @@
             <div class="categories-grid" id="main-categories-container"></div>
         </div>
 
+        <div id="screen-team-setup" class="screen">
+            <h2 style="color: var(--accent);">Duelo de Equipos <span id="team-setup-test-badge" class="test-badge" hidden>MODO PRUEBA</span></h2>
+            <p id="team-config-note" style="color: var(--text-muted); margin: 10px 0 20px;"></p>
+            <div class="form-group">
+                <label for="team-response-mode">Modalidad de respuesta</label>
+                <select id="team-response-mode" onchange="actualizarCapitanes()">
+                    <option value="individual">Turnos individuales</option>
+                    <option value="captain-fixed">Capitán fijo</option>
+                    <option value="captain-rotating">Capitán rotativo</option>
+                </select>
+            </div>
+            <div id="captains-config" class="mode-selection" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;" hidden>
+                <div class="form-group"><label for="blue-captain">Capitán Azul</label><select id="blue-captain"></select></div>
+                <div class="form-group"><label for="red-captain">Capitán Rojo</label><select id="red-captain"></select></div>
+            </div>
+            <button class="btn-primary" onclick="iniciarDueloEquipos()">Iniciar duelo · 10 rondas</button>
+            <button class="btn-secondary" style="margin-top: 12px;" onclick="renderCategories()">← Volver</button>
+        </div>
+
         <!-- PANTALLA 4: TABLERO DE LAS 6 SUBCATEGORÍAS Y PUNTUACIÓN (100 a 500) -->
         <div id="screen-subcategories" class="screen">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -119,6 +138,23 @@
             <p id="question-turn-message" class="question-turn-message"></p>
             <div class="question-text" id="q-text">Cargando pregunta...</div>
             <div class="options-list" id="options-container"></div>
+        </div>
+
+        <div id="screen-tutorial" class="screen">
+            <div class="test-badge">RONDA 0 · TUTORIAL</div>
+            <h2 id="tutorial-title" style="color: var(--accent);">Práctica guiada</h2>
+            <p id="tutorial-message" class="room-note"></p>
+            <button id="tutorial-action" class="btn-primary" onclick="avanzarTutorial()" hidden>Continuar práctica</button>
+        </div>
+
+        <div id="screen-team-question" class="screen">
+            <div id="team-test-badge" class="test-badge" hidden>MODO PRUEBA</div>
+            <div class="question-meta"><span id="team-progress">Ronda 1 de 10</span><span id="team-active-label" style="color: var(--accent); font-weight: bold;"></span></div>
+            <div id="team-scores" class="team-scores"></div>
+            <div id="team-timer" class="timer">Tiempo: 00:30</div>
+            <p id="team-turn-message" class="question-turn-message"></p>
+            <div class="question-text" id="team-q-text">Cargando pregunta...</div>
+            <div class="options-list" id="team-options-container"></div>
         </div>
 
         <!-- PANTALLA 6: FIN DE PARTIDA / BLOQUE -->

@@ -119,6 +119,11 @@ input[type="text"]:focus {
     border-color: var(--accent);
 }
 
+select {
+    width: 100%; padding: 12px 16px; background: var(--bg-main); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem;
+}
+
 /* BOTONES GENERALES */
 .btn-primary {
     background: var(--accent);
@@ -386,3 +391,9 @@ input[type="text"]:focus {
 .question-turn-message { color: var(--accent); text-align: center; margin: -8px 0 18px; font-weight: 700; }
 .option-btn.correct { background: var(--success); border-color: var(--success); color: #fff; }
 .option-btn.incorrect { background: var(--danger); border-color: var(--danger); color: #fff; }
+.test-badge { display: inline-block; margin: 0 0 12px; padding: 5px 9px; border-radius: 999px; background: rgba(250, 204, 21, .16); border: 1px solid #facc15; color: #fde047; font-size: .78rem; font-weight: 800; letter-spacing: .06em; }
+.team-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; }
+.team-score { padding: 12px; border: 2px solid var(--border-color); border-radius: 10px; text-align: center; font-weight: 700; }
+.team-score.blue { border-color: #38bdf8; color: #7dd3fc; }
+.team-score.red { border-color: #f87171; color: #fca5a5; }
+.team-score.active { box-shadow: 0 0 0 3px rgba(56, 189, 248, .15); animation: turnPulse 1.4s ease-in-out infinite; }
