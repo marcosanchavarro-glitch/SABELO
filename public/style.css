@@ -349,6 +349,9 @@ input[type="text"]:focus {
 .players-scoreboard { display: flex; flex-wrap: wrap; gap: 8px; }
 .player-score { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 999px; padding: 5px 10px; }
 .player-score.is-turn { border-color: var(--accent); color: var(--accent); }
+.player-score.is-turn { box-shadow: 0 0 0 2px rgba(56, 189, 248, .22); animation: turnPulse 1.4s ease-in-out infinite; }
+.player-score.is-offline { opacity: .5; text-decoration: line-through; }
+@keyframes turnPulse { 50% { transform: translateY(-2px); box-shadow: 0 0 0 5px rgba(56, 189, 248, .08); } }
 .room-note { grid-column: 1 / -1; color: var(--accent); background: rgba(56, 189, 248, .08); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; }
 .category-card { color: var(--text-main); text-align: left; cursor: pointer; }
 .category-card:disabled { opacity: .6; cursor: not-allowed; }
@@ -380,6 +383,6 @@ input[type="text"]:focus {
 .jeopardy-board .board-tile:disabled { cursor: not-allowed; opacity: .72; }
 .jeopardy-board .board-tile.used { color: var(--success); background: rgba(34, 197, 94, .1); border-color: var(--success); }
 .timer { text-align: center; font-size: 1.2rem; color: var(--accent); font-weight: 700; margin: -8px 0 10px; }
-.question-turn-message { color: var(--text-muted); text-align: center; margin: -8px 0 18px; }
+.question-turn-message { color: var(--accent); text-align: center; margin: -8px 0 18px; font-weight: 700; }
 .option-btn.correct { background: var(--success); border-color: var(--success); color: #fff; }
 .option-btn.incorrect { background: var(--danger); border-color: var(--danger); color: #fff; }
