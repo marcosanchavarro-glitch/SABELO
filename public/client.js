@@ -21,6 +21,9 @@ let identityRequest = 0;
 let pendingAction = null;
 let restoreTimeout = null;
 let roomCreateConfig = { mode: 'individual', responseMode: null };
+let boardPage = 0;
+const BOARD_PAGE_SIZE = 6;
+const flowTimings = [];
 
 const categoryIcons = {
   cultura: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22"/><path d="M10 32h44M32 10c7 7 10 15 10 22s-3 15-10 22c-7-7-10-15-10-22s3-15 10-22Z"/></svg>',
@@ -95,8 +98,8 @@ function renderSpectatorBroadcast(screenId = '') {
     const groups = integrantesPorEquipo();
     round.textContent = 'PRÓXIMAMENTE';
     markup = roomState.mode === 'teams'
-      ? `<section class="tv-waiting"><p>SABELO — CHICOS VS. CHICAS</p><h2>LA TRANSMISIÓN ESTÁ POR COMENZAR</h2><div class="tv-rosters">${['blue', 'red'].map(key => `<article class="${key}"><h3>${escapeHtml(labels[key])}</h3><p>${groups[key].map(player => escapeHtml(player.name)).join(' · ') || 'Esperando integrantes'}</p></article>`).join('')}</div><small>Código de sala · ${escapeHtml(roomState.code)}</small></section>`
-      : `<section class="tv-waiting"><p>SABELO — TODOS CONTRA TODOS</p><h2>LA TRANSMISIÓN ESTÁ POR COMENZAR</h2><div class="tv-rosters solo"><article><h3>PARTICIPANTES</h3><p>${roomState.players.map(player => escapeHtml(player.name)).join(' · ') || 'Esperando participantes'}</p></article></div><small>Código de sala · ${escapeHtml(roomState.code)}</small></section>`;
+      ? `<section class="tv-waiting"><p>SABELO — CHICOS VS. CHICAS</p><h2>LA TRANSMISIÓN ESTÁ POR COMENZAR</h2><div class="tv-rosters">${['blue', 'red'].map(key => `<article class="${key}"><h3>${escapeHtml(labels[key])}</h3><p>${groups[key].map(player => escapeHtml(player.name)).join(' · ') || 'Esperando integrantes'}</p></article>`).join('')}</div><div class="tv-room-code">Código · ${escapeHtml(roomState.code)} ${copyButtonMarkup()}</div></section>`
+      : `<section class="tv-waiting"><p>SABELO — TODOS CONTRA TODOS</p><h2>LA TRANSMISIÓN ESTÁ POR COMENZAR</h2><div class="tv-rosters solo"><article><h3>PARTICIPANTES</h3><p>${roomState.players.map(player => escapeHtml(player.name)).join(' · ') || 'Esperando participantes'}</p></article></div><div class="tv-room-code">Código · ${escapeHtml(roomState.code)} ${copyButtonMarkup()}</div></section>`;
   } else if (screenId === 'screen-tutorial' || duel?.status === 'tutorial' || roomState.tutorial) {
     round.textContent = 'RONDA 0 · TUTORIAL';
     const notice = eventNotice ? `<div class="tv-event ${eventNotice.kind}"><strong>${eventNotice.title}</strong><span>${escapeHtml(eventNotice.detail)}</span></div>` : '';
@@ -136,9 +139,44 @@ function setActionStatus(message = '') {
   status.hidden = !message;
   status.textContent = message;
 }
+function markFlow(stage) {
+  flowTimings.push({ stage, at: performance.now() });
+  if (flowTimings.length > 30) flowTimings.shift();
+  // Instrumentación local y temporal: útil para diagnosticar latencias sin enviar datos privados.
+  window.__sabeloFlowTimings = flowTimings.slice();
+}
+function showLaunchFeedback(message) {
+  const overlay = document.getElementById('game-launch-overlay');
+  document.getElementById('game-launch-message').textContent = message;
+  overlay.hidden = false;
+}
+function hideLaunchFeedback() { document.getElementById('game-launch-overlay').hidden = true; }
+function copyButtonMarkup() {
+  return '<button type="button" data-copy-code onclick="copyRoomCode()" aria-label="Copiar código de sala"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copiar</span></button>';
+}
+async function copyRoomCode() {
+  const code = roomState?.code || document.getElementById('lbl-room').textContent;
+  if (!/^SABELO-[A-Z0-9]+$/.test(code || '')) return setActionStatus('Todavía no hay un código de sala para copiar.');
+  const buttons = [...document.querySelectorAll('[data-copy-code]')];
+  const setCopyState = (text, failed = false) => buttons.forEach(button => {
+    button.textContent = text; button.classList.toggle('copy-failed', failed); button.disabled = true;
+  });
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(code);
+    else {
+      const input = document.createElement('textarea'); input.value = code; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.append(input); input.select();
+      const copied = document.execCommand('copy'); input.remove(); if (!copied) throw new Error('COPY_UNAVAILABLE');
+    }
+    setCopyState('¡Código copiado!');
+  } catch {
+    setCopyState('No se pudo copiar', true);
+    setActionStatus('No se pudo copiar el código. Podés seleccionarlo y copiarlo manualmente.');
+  }
+  window.setTimeout(() => buttons.forEach(button => { button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0 1 1h3"></path></svg><span>Copiar</span>'; button.classList.remove('copy-failed'); button.disabled = false; }), 2000);
+}
 function resetToIdentity(message = '') {
   clearInterval(timerInterval);
-  roomState = null; roomStateVersion = 0; currentTeamQuestion = null; pendingQuestion = null; isHost = false;
+  roomState = null; roomStateVersion = 0; currentTeamQuestion = null; pendingQuestion = null; isHost = false; boardPage = 0; hideLaunchFeedback();
   localStorage.removeItem(SESSION_KEY);
   document.getElementById('header-user-info').style.display = 'none';
   changeScreen('screen-identity');
@@ -151,7 +189,7 @@ function finishPendingAction() {
   pendingAction = null;
   setActionStatus('');
 }
-function sendAction(event, payload, { label, button, onSuccess, onError }) {
+function sendAction(event, payload, { label, button, onSuccess, onError, onTimeout }) {
   if (!socket.connected) {
     setActionStatus('Sin conexión. Esperá a que SABELO se reconecte antes de continuar.');
     return notifyError('No hay conexión con la sala. Intentá nuevamente cuando figure “Conectado”.');
@@ -166,6 +204,7 @@ function sendAction(event, payload, { label, button, onSuccess, onError }) {
       ? 'No recibimos confirmación. La solicitud podría haberse procesado; no la repitas hasta actualizar la página.'
       : 'No recibimos confirmación del servidor. Revisá la conexión e intentá de nuevo.';
     setActionStatus(message);
+    onTimeout?.();
     notifyError(message);
   }, ACTION_TIMEOUT_MS);
   pendingAction = { timer, button };
@@ -258,11 +297,13 @@ function acceptRoom(response, code, requestId) {
   if (requestId !== identityRequest) return;
   if (response.error) return notifyError(response.error);
   const incomingVersion = Number.isInteger(response.state?.version) ? response.state.version : 0;
+  const previousCategoryKey = roomState?.categoryKey;
   if (!roomState || incomingVersion >= roomStateVersion) {
     roomState = response.state;
     roomStateVersion = incomingVersion;
   }
   const actualCode = response.state?.code || code;
+  if (previousCategoryKey !== roomState?.categoryKey) boardPage = 0;
   saveSession({ code: actualCode, participantId: response.participantId, reconnectToken: response.reconnectToken });
   syncIdentityFromState(response.participantId);
   document.getElementById('lbl-room').textContent = actualCode;
@@ -316,8 +357,11 @@ socket.on('room:state', state => {
   if (!sameSession(saved, { ...saved, code: state.code })) return;
   const incomingVersion = Number.isInteger(state.version) ? state.version : 0;
   if (roomState && incomingVersion < roomStateVersion) return;
+  const previousCategoryKey = roomState?.categoryKey;
   roomState = state;
   roomStateVersion = incomingVersion;
+  if (previousCategoryKey !== state.categoryKey) boardPage = 0;
+  if (state.categoryKey || state.activeQuestion) { markFlow('state:confirmed'); hideLaunchFeedback(); }
   syncIdentityFromState();
   renderState();
 });
@@ -444,10 +488,13 @@ function renderCategories() {
 }
 function selectCategory(categoryKey) {
   if (!isHost) return notifyError('Esperando la confirmación de tu sesión de anfitrión. Actualizá la página si el problema continúa.');
+  markFlow('category:click'); showLaunchFeedback('INICIANDO RONDA 0…');
   sendAction('category:select', { categoryKey }, {
     label: 'Iniciando categoría…',
-    onSuccess: () => {},
+    onSuccess: () => markFlow('category:ack'),
+    onTimeout: () => { hideLaunchFeedback(); markFlow('category:timeout'); },
     onError: response => {
+    hideLaunchFeedback(); markFlow('category:error');
     // Safari y navegadores integrados pueden reconectar el socket sin recargar
     // la vista. Reautenticar el token vigente devuelve la identidad al socket.
     if (response.code === 'ROOM_NOT_FOUND') return resetToIdentity('La sala ya no existe en el servidor.');
@@ -496,29 +543,48 @@ function renderBoard() {
   document.getElementById('btn-exit-match').style.display = isHost ? '' : 'none';
   renderTurnStatus();
   const entries = Object.entries(category.subcategories);
-  const points = [...new Set(entries.flatMap(([, sub]) => sub.questions.map(question => question.points)))].sort((a, b) => a - b);
-  const table = document.createElement('div'); table.className = 'jeopardy-board';
-  table.innerHTML = `<div class="corner">Puntos</div>${entries.map(([, sub]) => `<div class="board-heading">${sub.title}</div>`).join('')}`;
+  const totalPages = Math.max(1, Math.ceil(entries.length / BOARD_PAGE_SIZE));
+  boardPage = Math.min(Math.max(0, boardPage), totalPages - 1);
+  const pageEntries = entries.slice(boardPage * BOARD_PAGE_SIZE, (boardPage + 1) * BOARD_PAGE_SIZE);
+  const points = [...new Set(pageEntries.flatMap(([, sub]) => sub.questions.map(question => question.points)))].sort((a, b) => a - b);
+  const controls = document.createElement('nav'); controls.className = 'board-pagination'; controls.setAttribute('aria-label', 'Páginas de subcategorías');
+  controls.innerHTML = `<button type="button" class="btn-secondary" ${boardPage === 0 ? 'disabled' : ''}>Anterior</button><span>Página ${boardPage + 1} de ${totalPages}</span><button type="button" class="btn-secondary" ${boardPage >= totalPages - 1 ? 'disabled' : ''}>Siguiente</button>`;
+  const [previous, next] = controls.querySelectorAll('button');
+  previous.onclick = () => { boardPage -= 1; renderBoard(); };
+  next.onclick = () => { boardPage += 1; renderBoard(); };
+  const table = document.createElement('div'); table.className = 'jeopardy-board'; table.style.setProperty('--board-columns', pageEntries.length);
+  table.innerHTML = `<div class="corner">Puntos</div>${pageEntries.map(([, sub]) => `<div class="board-heading">${escapeHtml(sub.title)}</div>`).join('')}`;
   points.forEach(pointsValue => {
     table.insertAdjacentHTML('beforeend', `<div class="point-label">${pointsValue}</div>`);
-    entries.forEach(([subKey, sub]) => {
+    pageEntries.forEach(([subKey, sub]) => {
       const qIndex = sub.questions.findIndex(question => question.points === pointsValue);
+      if (qIndex < 0) { const empty = document.createElement('div'); empty.className = 'board-tile board-empty'; empty.textContent = '—'; empty.setAttribute('aria-label', 'Sin pregunta para este puntaje'); table.append(empty); return; }
       const used = roomState.usedQuestions.includes(`${roomState.categoryKey}:${subKey}:${qIndex}`);
       const button = document.createElement('button'); button.className = `board-tile ${used ? 'used' : ''}`;
-      button.textContent = used ? '✓' : pointsValue;
-      button.disabled = used || !isMyTurn() || Boolean(roomState.activeQuestion);
-      button.title = used ? 'Pregunta jugada' : isMyTurn() ? 'Seleccionar pregunta' : 'Esperá tu turno';
-      button.onclick = () => socket.emit('question:select', { subKey, qIndex }, reportError);
+      button.textContent = used ? 'JUGADA' : pointsValue;
+      button.disabled = used || !isMyTurn() || Boolean(roomState.activeQuestion) || Boolean(pendingAction);
+      button.title = used ? 'Pregunta consumida' : isMyTurn() ? 'Seleccionar pregunta' : 'Esperá tu turno';
+      button.onclick = () => selectBoardQuestion(subKey, qIndex, button);
       table.append(button);
     });
   });
-  document.getElementById('subcategories-container').replaceChildren(table);
+  document.getElementById('subcategories-container').replaceChildren(controls, table);
   if (!roomState.activeQuestion) changeScreen('screen-subcategories');
+}
+function selectBoardQuestion(subKey, qIndex, button) {
+  markFlow('question:click'); showLaunchFeedback('PREPARANDO PREGUNTA…');
+  sendAction('question:select', { subKey, qIndex }, {
+    label: 'Preparando pregunta…', button,
+    onSuccess: () => markFlow('question:ack'),
+    onTimeout: () => { hideLaunchFeedback(); markFlow('question:timeout'); },
+    onError: response => { hideLaunchFeedback(); markFlow('question:error'); reportError(response); }
+  });
 }
 
 function renderQuestion(payload) {
   if (Number.isInteger(payload.stateVersion)) roomStateVersion = Math.max(roomStateVersion, payload.stateVersion);
   currentQuestionId = payload.id;
+  markFlow('question:render'); hideLaunchFeedback();
   currentBroadcastQuestion = payload;
   // Las preguntas de tutorial no pertenecen a un catálogo competitivo.
   // Reconocerlas también por ausencia de categoría evita que un estado tardío

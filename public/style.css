@@ -41,6 +41,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .brand-lockup span, .eyebrow { color: var(--accent); font-size: .72rem; letter-spacing: .16em; font-weight: 800; }
 .user-info { display: flex; align-items: stretch; gap: 0; background: rgba(16,25,43,.75); border: 1px solid var(--border-color); }
 .user-info > span, .score-board { display: grid; align-content: center; gap: 2px; padding: 8px 12px; border-left: 1px solid rgba(185,201,221,.18); font-size: .78rem; white-space: nowrap; }
+.room-code-slot { grid-template-columns: auto auto; column-gap: 7px; }.room-code-slot small { grid-column: 1 / -1; }
+.copy-code-btn, .tv-room-code button { min-height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 8px; color: var(--text-main); background: rgba(117,184,232,.12); border: 1px solid var(--accent); border-radius: 3px; font-weight: 800; font-size: .68rem; cursor: pointer; }.copy-code-btn svg, .tv-room-code button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }.copy-code-btn:hover, .tv-room-code button:hover { color: #10192B; background: var(--accent); }.copy-code-btn.copy-failed, .tv-room-code button.copy-failed { border-color: var(--danger); color: #ffd2d0; }.copy-code-btn:disabled, .tv-room-code button:disabled { cursor: default; opacity: .85; }
 .user-info > span:first-child { border-left: 0; }
 .user-info small { color: var(--text-muted); font-size: .6rem; letter-spacing: .1em; }
 .user-info strong { color: var(--text-main); }
@@ -132,15 +134,18 @@ input:disabled { opacity: .65; }
 .player-score.is-offline { opacity: .55; text-decoration: line-through; }
 @keyframes turnPulse { 50% { transform: translateY(-2px); box-shadow: 0 0 0 5px rgba(117,184,232,.08); } }
 
-#subcategories-container { overflow-x: auto; padding-bottom: 6px; }
-.jeopardy-board { min-width: 760px; display: grid; grid-template-columns: 78px repeat(6, minmax(105px, 1fr)); gap: 6px; }
+#subcategories-container { padding-bottom: 6px; }
+.board-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 0 12px; color: var(--text-muted); font-weight: 800; }.board-pagination .btn-secondary:disabled { opacity: .42; cursor: default; }
+.jeopardy-board { display: grid; grid-template-columns: 78px repeat(var(--board-columns), minmax(0, 1fr)); gap: 6px; }
 .board-heading, .corner { min-height: 74px; display: flex; align-items: center; justify-content: center; padding: 9px; color: var(--text-main); text-align: center; background: #142B4D; border: 1px solid var(--border-color); font-family: var(--title-font); font-size: .78rem; line-height: 1.2; }
 .corner, .point-label { color: var(--gold); }
 .point-label { display: flex; align-items: center; justify-content: center; font-family: var(--title-font); font-size: 1.05rem; }
 .board-tile { min-height: 58px; color: var(--gold); background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-family: var(--title-font); font-size: 1.2rem; }
 .board-tile:hover:not(:disabled) { color: #10192B; background: var(--gold); border-color: var(--gold); transform: translateY(-2px); }
 .board-tile:disabled { cursor: not-allowed; opacity: .66; }
-.board-tile.used { color: var(--text-muted); background: rgba(16,25,43,.55); text-decoration: line-through; }
+.board-tile.used { color: var(--text-muted); background: repeating-linear-gradient(135deg, rgba(185,201,221,.08) 0 7px, rgba(16,25,43,.82) 7px 14px); border-color: rgba(185,201,221,.48); font-family: var(--body-font); font-size: .68rem; letter-spacing: .08em; text-decoration: line-through; }
+.board-tile.board-empty { display: grid; place-items: center; color: rgba(185,201,221,.35); background: rgba(8,17,31,.38); border-style: dashed; cursor: default; }
+.game-launch-overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-content: center; gap: 10px; padding: 24px; color: var(--text-main); text-align: center; background: rgba(8,17,31,.76); pointer-events: none; }.game-launch-overlay strong { padding: 20px 28px; color: var(--gold); background: var(--bg-panel); border: 2px solid var(--accent); font-family: var(--title-font); font-size: clamp(1.45rem, 4vw, 3.3rem); letter-spacing: .06em; box-shadow: 8px 8px 0 rgba(0,0,0,.22); animation: tvPlateIn .28s ease-out; }.launch-kicker { color: var(--accent); font-weight: 900; letter-spacing: .16em; }
 
 .question-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--text-muted); font-size: .84rem; font-weight: 800; letter-spacing: .04em; }
 .question-meta span:last-child { color: var(--gold) !important; }
@@ -246,6 +251,7 @@ input:disabled { opacity: .65; }
 .tv-rosters article { padding: clamp(18px, 2vw, 30px); background: rgba(32,52,81,.78); border: 1px solid var(--border-color); }
 .tv-rosters article.blue { border-top: 5px solid var(--tv-blue); }.tv-rosters article.red { border-top: 5px solid var(--tv-red); }
 .tv-rosters h3 { color: var(--text-main); font-size: clamp(1.2rem, 2vw, 2.1rem); }.tv-rosters p { color: var(--text-muted); line-height: 1.6; }.tv-rosters.solo { grid-template-columns: minmax(0, 1fr); }
+.tv-room-code { margin-top: 20px; color: var(--gold); font-weight: 900; letter-spacing: .05em; }.tv-room-code button { margin-left: 8px; }
 .broadcast-footer { min-height: 86px; display: flex; justify-content: center; align-items: stretch; gap: 8px; padding-top: 16px; border-top: 2px solid rgba(117,184,232,.5); }
 .tv-team-score, .tv-player-score { min-width: min(28vw, 310px); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 10px 16px; color: var(--text-main); background: rgba(16,25,43,.84); border: 1px solid rgba(185,201,221,.33); font-weight: 900; }
 .tv-team-score.blue { border-bottom: 4px solid var(--tv-blue); }.tv-team-score.red { border-bottom: 4px solid var(--tv-red); }
@@ -256,4 +262,4 @@ input:disabled { opacity: .65; }
 .tv-final-scores { display: flex; align-items: stretch; justify-content: center; gap: 10px; margin-top: clamp(28px, 4vw, 58px); }.tv-final > span { display: block; margin-top: 25px; color: var(--text-muted); }
 .tv-podium-places { display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 14px; max-width: 900px; margin: clamp(30px, 5vw, 70px) auto 0; }.tv-podium-places article { min-height: 150px; display: grid; align-content: center; gap: 8px; padding: 20px; background: rgba(8,17,31,.68); border-top: 5px solid var(--tv-blue); }.tv-podium-places article:nth-child(1) { min-height: 220px; border-color: var(--gold); }.tv-podium-places span { color: var(--gold); font-family: var(--title-font); font-size: 2rem; }.tv-podium-places strong { font-size: clamp(1rem, 1.8vw, 1.6rem); }.tv-podium-places b { color: var(--tv-blue); }
 
-@media (max-width: 760px) { .spectator-broadcast { padding: 18px 16px 24px; }.broadcast-header { grid-template-columns: 1fr auto; gap: 12px; }.broadcast-status { justify-self: end; }.broadcast-fullscreen { display: none; }.broadcast-brand small { display: none; }.broadcast-main { min-height: calc(100vh - 185px); }.tv-question-meta { align-items: flex-start; flex-direction: column; }.tv-options, .tv-rosters { grid-template-columns: 1fr; }.broadcast-footer { flex-wrap: wrap; }.tv-team-score, .tv-player-score { min-width: calc(50% - 10px); }.tv-podium-places { gap: 6px; }.tv-podium-places article, .tv-podium-places article:nth-child(1) { min-height: 125px; padding: 11px 7px; }.tv-podium-places span { font-size: 1.35rem; } }
+@media (max-width: 760px) { .spectator-broadcast { padding: 18px 16px 24px; }.broadcast-header { grid-template-columns: 1fr auto; gap: 12px; }.broadcast-status { justify-self: end; }.broadcast-fullscreen { display: none; }.broadcast-brand small { display: none; }.broadcast-main { min-height: calc(100vh - 185px); }.tv-question-meta { align-items: flex-start; flex-direction: column; }.tv-options, .tv-rosters { grid-template-columns: 1fr; }.broadcast-footer { flex-wrap: wrap; }.tv-team-score, .tv-player-score { min-width: calc(50% - 10px); }.tv-podium-places { gap: 6px; }.tv-podium-places article, .tv-podium-places article:nth-child(1) { min-height: 125px; padding: 11px 7px; }.tv-podium-places span { font-size: 1.35rem; }.jeopardy-board { grid-template-columns: 52px repeat(var(--board-columns), minmax(0, 1fr)); gap: 3px; }.board-heading, .corner { min-height: 60px; padding: 5px 3px; font-size: .58rem; overflow-wrap: anywhere; }.point-label { font-size: .78rem; }.board-tile { min-height: 48px; padding: 4px 2px; font-size: .82rem; }.board-tile.used { font-size: .5rem; }.board-pagination { gap: 7px; font-size: .78rem; }.board-pagination .btn-secondary { min-height: 38px; padding: 6px 9px; } }

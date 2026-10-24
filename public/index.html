@@ -17,7 +17,7 @@
             <div class="user-info" id="header-user-info" style="display: none;">
                 <span><small>EN SALA</small><strong id="lbl-username">Jugador</strong></span>
                 <span><small>ROL</small><strong id="lbl-role">Jugador</strong></span>
-                <span><small>CÓDIGO</small><strong id="lbl-room">SALA</strong></span>
+                <span class="room-code-slot"><small>CÓDIGO</small><strong id="lbl-room">SALA</strong><button type="button" class="copy-code-btn" data-copy-code onclick="copyRoomCode()" aria-label="Copiar código de sala"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copiar</span></button></span>
                 <div class="score-board">Tus puntos: <span id="current-score">0</span></div>
             </div>
         </header>
@@ -163,6 +163,11 @@
                 <div id="players-scoreboard" class="players-scoreboard"></div>
             </section>
             <div id="subcategories-container"></div>
+        </div>
+
+        <div id="game-launch-overlay" class="game-launch-overlay" hidden role="status" aria-live="polite">
+            <span class="launch-kicker">SABELO EN VIVO</span>
+            <strong id="game-launch-message">PREPARANDO PREGUNTA…</strong>
         </div>
 
         <!-- PANTALLA 5: PREGUNTA ACTIVA -->

@@ -2,9 +2,9 @@ const { test, expect } = require('@playwright/test');
 const { createTriviaServer } = require('../../server');
 
 function privateFixture() {
-  const question = index => ({
+  const question = (index, points = (index + 1) * 100) => ({
     id: `e2e-${index + 1}`,
-    points: (index + 1) * 100,
+    points,
     q: `Pregunta privada de prueba ${index + 1}`,
     options: ['Alternativa 1', 'Alternativa 2', 'Alternativa 3'],
     // Este valor solo vive en el proceso Node de pruebas: nunca se envía al navegador.
@@ -14,7 +14,10 @@ function privateFixture() {
   return {
     biblia: {
       title: 'Biblia de prueba',
-      subcategories: { pruebas: { title: 'Pruebas', questions: Array.from({ length: 20 }, (_, index) => question(index)) } }
+      subcategories: Object.fromEntries(Array.from({ length: 7 }, (_, subIndex) => [
+        `pruebas-${subIndex + 1}`,
+        { title: `Pruebas ${subIndex + 1}`, questions: Array.from({ length: 3 }, (_, pointIndex) => question((subIndex * 3) + pointIndex, (pointIndex + 1) * 100)) }
+      ]))
     }
   };
 }
@@ -41,6 +44,7 @@ async function createPlayerPage(context, name, spectator = false) {
 
 async function createFastContext(browser, viewport, resultDelay) {
   const context = await browser.newContext({ viewport });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   // Solo en el navegador de prueba: acorta la placa visual de resultado.
   // No modifica el servidor, el protocolo Socket.IO ni las reglas de juego.
   await context.addInitScript(delayForResult => {
@@ -115,18 +119,20 @@ async function playWrongIndividual(host, player) {
 }
 
 async function selectIndividualQuestion(host, player) {
-  await expect.poll(async () => {
+  for (let boardPage = 0; boardPage < 2; boardPage += 1) {
     for (const page of [host, player]) {
-      const tile = page.locator('.board-tile:not([disabled])').first();
-      if (await tile.isVisible().catch(() => false) && await tile.isEnabled().catch(() => false)) return true;
+      const tile = page.locator('button.board-tile:not([disabled])').first();
+      if (await tile.isVisible().catch(() => false) && await tile.isEnabled().catch(() => false)) {
+        await tile.click();
+        return;
+      }
     }
-    return false;
-  }, { timeout: 8_000 }).toBe(true);
-  for (const page of [host, player]) {
-    const tile = page.locator('.board-tile:not([disabled])').first();
-    if (await tile.isVisible().catch(() => false) && await tile.isEnabled().catch(() => false)) {
-      await tile.click();
-      return;
+    for (const page of [host, player]) {
+      const next = page.getByRole('button', { name: 'Siguiente' });
+      if (await next.isVisible().catch(() => false) && await next.isEnabled().catch(() => false)) {
+        await next.click();
+        break;
+      }
     }
   }
   throw new Error('No se encontró una pregunta individual disponible.');
@@ -162,6 +168,12 @@ test('partida integral: tres sesiones aisladas, tutorial, rebotes y final de equ
   await host.getByRole('button', { name: 'Unirme a Chicos' }).click();
   const roomCode = await host.locator('#lbl-room').textContent();
   expect(roomCode).toMatch(/^SABELO-/);
+  await host.locator('[data-copy-code]').click();
+  await expect(host.locator('[data-copy-code]')).toHaveText('¡Código copiado!');
+  await host.reload();
+  await expect(host.locator('#lbl-room')).toHaveText(roomCode);
+  await host.locator('[data-copy-code]').click();
+  await expect(host.locator('[data-copy-code]')).toHaveText('¡Código copiado!');
 
   const player = await createPlayerPage(playerContext, 'Jugadora');
   await player.getByRole('button', { name: 'Unirse a sala' }).click();
@@ -261,6 +273,14 @@ test('modo individual: tutorial y podio final en pantalla de espectador', async 
   await playWrongIndividual(host, player);
   await expect(host.locator('#tutorial-action')).toHaveText('Iniciar competencia oficial');
   await host.locator('#tutorial-action').click();
+
+  await expect(host.locator('.board-heading')).toHaveCount(6);
+  await expect(host.getByText('Página 1 de 2')).toBeVisible();
+  await expect(host.getByRole('button', { name: 'Anterior' })).toBeDisabled();
+  await host.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(host.locator('.board-heading')).toHaveCount(1);
+  await expect(host.getByText('Página 2 de 2')).toBeVisible();
+  await host.getByRole('button', { name: 'Anterior' }).click();
 
   for (let question = 0; question < 20; question += 1) {
     await selectIndividualQuestion(host, player);
