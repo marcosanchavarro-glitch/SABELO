@@ -13,6 +13,7 @@
         <!-- CABECERA GENERAL -->
         <header class="studio-header">
             <div class="brand-lockup"><h1>SABELO</h1><span>CONCURSO EN VIVO</span></div>
+            <p id="connection-status" class="connection-status" data-state="connecting" role="status" aria-live="polite">Conectando…</p>
             <div class="user-info" id="header-user-info" style="display: none;">
                 <span><small>EN SALA</small><strong id="lbl-username">Jugador</strong></span>
                 <span><small>ROL</small><strong id="lbl-role">Jugador</strong></span>
@@ -20,6 +21,7 @@
                 <div class="score-board">Tus puntos: <span id="current-score">0</span></div>
             </div>
         </header>
+        <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
 
         <!-- PANTALLA 1: INGRESO DE IDENTIDAD Y ROL -->
         <div id="screen-identity" class="screen active identity-screen">
@@ -76,6 +78,41 @@
             <div>
                 <button class="btn-secondary" onclick="changeScreen('screen-identity')">Volver</button>
             </div>
+        </div>
+
+        <div id="screen-create-config" class="screen create-config-screen">
+            <p class="eyebrow">NUEVA TRANSMISIÓN</p><h2>Elegí la modalidad</h2>
+            <p class="screen-lede">La configuración queda asociada a la sala y el servidor la valida.</p>
+            <div class="mode-selection mode-choice-grid" id="room-mode-options">
+                <button type="button" class="btn-mode active-role" data-room-mode="individual" onclick="seleccionarModalidadSala('individual')"><h3>Individual</h3><p>Cada participante suma sus propios puntos y compite por el podio.</p></button>
+                <button type="button" class="btn-mode" data-room-mode="teams" onclick="seleccionarModalidadSala('teams')"><h3>Por equipos</h3><p>Chicos contra Chicas con puntaje compartido.</p></button>
+            </div>
+            <section id="team-response-options" hidden>
+                <p class="eyebrow">RESPUESTA DEL EQUIPO</p>
+                <div class="mode-selection mode-choice-grid">
+                    <button type="button" class="btn-mode active-role" data-response-mode="individual" onclick="seleccionarRespuestaEquipo('individual')"><h3>Turnos individuales</h3><p>Cada integrante responde cuando le corresponde.</p></button>
+                    <button type="button" class="btn-mode" data-response-mode="captain-fixed" onclick="seleccionarRespuestaEquipo('captain-fixed')"><h3>Capitán fijo</h3><p>Una persona responde por cada equipo.</p></button>
+                    <button type="button" class="btn-mode" data-response-mode="captain-rotating" onclick="seleccionarRespuestaEquipo('captain-rotating')"><h3>Capitán rotativo</h3><p>El representante cambia durante el duelo.</p></button>
+                </div>
+            </section>
+            <button id="btn-create-config" class="btn-primary" onclick="crearSalaConfigurada()">Crear sala individual</button>
+            <button class="btn-secondary" style="margin-top: 12px;" onclick="changeScreen('screen-room')">Volver</button>
+        </div>
+
+        <div id="screen-team-choice" class="screen team-choice-screen">
+            <p class="eyebrow">SALA POR EQUIPOS</p><h2>Elegí tu bando</h2>
+            <p class="screen-lede">Tu elección queda registrada para esta partida. Podrás jugar cuando el anfitrión inicie la Ronda 0.</p>
+            <div class="team-choice-grid">
+                <button type="button" class="team-choice-card blue" onclick="elegirBando('blue')"><span class="team-choice-kicker">EQUIPO AZUL</span><h3>Chicos</h3><p>Unirme a Chicos</p></button>
+                <button type="button" class="team-choice-card red" onclick="elegirBando('red')"><span class="team-choice-kicker">EQUIPO ROJO</span><h3>Chicas</h3><p>Unirme a Chicas</p></button>
+            </div>
+        </div>
+
+        <div id="screen-team-lobby" class="screen team-lobby-screen">
+            <p class="eyebrow">SALA DE ESPERA</p><h2>Chicos vs. Chicas</h2>
+            <p id="team-lobby-note" class="room-note"></p>
+            <div id="team-lobby-rosters" class="team-rosters" aria-live="polite"></div>
+            <button id="team-lobby-start" class="btn-primary" onclick="prepararDueloConfigurado()" hidden>Preparar Ronda 0</button>
         </div>
 
         <!-- PANTALLA 3: SELECCIÓN DE LAS 9 CATEGORÍAS PRINCIPALES -->
@@ -166,6 +203,18 @@
                 <p id="final-message" style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 25px;">Repasaste las preguntas de este bloque.</p>
                 <button class="btn-primary" onclick="reiniciarJuegoCompleto()">Elegir Otra Categoría</button>
             </div>
+        </div>
+        <div id="screen-podium" class="screen final-screen">
+            <p class="eyebrow">CLASIFICACIÓN FINAL</p><h2 id="podium-title">Podio</h2>
+            <div id="podium-leaders" class="podium-leaders"></div>
+            <div id="podium-ranking" class="final-ranking"></div>
+            <button id="podium-reset" class="btn-primary" onclick="reiniciarJuegoCompleto()" hidden>Elegir otra categoría</button>
+        </div>
+        <div id="screen-team-final" class="screen final-screen team-final-screen">
+            <p class="eyebrow">RESULTADO OFICIAL</p><h2 id="team-final-title">Fin del duelo</h2>
+            <p id="team-final-message" class="final-message"></p>
+            <div id="team-final-scores" class="team-final-scores"></div>
+            <button id="team-final-reset" class="btn-primary" onclick="reiniciarJuegoCompleto()" hidden>Crear otra partida</button>
         </div>
     </div>
 

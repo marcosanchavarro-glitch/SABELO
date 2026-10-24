@@ -173,16 +173,20 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
     connectedSockets.add(socket.id);
 
     receive(socket, 'room:create', (payload, callback) => {
-      if (!hasOnly(payload, ['name'])) return callback({ error: 'Datos de ingreso inválidos.' });
+      if (!hasOnly(payload, ['name', 'mode', 'responseMode'])) return callback({ error: 'Datos de ingreso inválidos.' });
       const name = text(payload.name, 20);
       if (!name) return callback({ error: 'Ingresá un alias válido.' });
+      const mode = payload.mode;
+      const responseMode = payload.responseMode;
+      if (!['individual', 'teams'].includes(mode)) return callback({ error: 'Modalidad de sala inválida.' });
+      if ((mode === 'individual' && responseMode !== null) || (mode === 'teams' && !['individual', 'captain-fixed', 'captain-rotating'].includes(responseMode))) return callback({ error: 'Configuración de equipos inválida.' });
       if (!createAllowed(socket)) return callback({ error: 'Alcanzaste el límite temporal de creación de salas.' });
       cleanExpiredRooms();
       if (rooms.size >= limits.maxRooms) return callback({ error: 'No se pueden crear más salas en este momento.' });
       let code = generateRoomCode(); let attempts = 0;
       while (rooms.has(code) && attempts++ < 10) code = generateRoomCode();
       if (rooms.has(code)) return callback({ error: 'No se pudo generar una sala. Intentá nuevamente.' });
-      const room = game.createRoom({ code, hostSocketId: socket.id, hostName: name });
+      const room = game.createRoom({ code, hostSocketId: socket.id, hostName: name, mode, responseMode });
       // Todas las validaciones ya pasaron: recién ahora se revoca la identidad
       // anterior para no perderla si la nueva creación falla.
       revokeCurrentIdentity(socket, code); rooms.set(code, room); bindSocket(socket, room, room.players[0]);
@@ -210,17 +214,37 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       if (['playing', 'tutorial'].includes(room.teamDuel?.status)) socket.emit('team:turn', { duel: team.publicDuel(room), question: team.publicQuestion(room, trivia) });
     });
 
+    receive(socket, 'team:choose', (payload, callback) => {
+      if (!hasOnly(payload, ['teamKey']) || !['blue', 'red'].includes(payload.teamKey)) return callback({ error: 'Equipo inválido.' });
+      const { room, actor } = getRoomAndActor(socket);
+      if (!room || !actor || actor.role !== 'jugador' || room.mode !== 'teams' || room.teamDuel || room.categoryKey) return callback({ error: 'No podés elegir un equipo ahora.' });
+      if (actor.teamKey) return callback({ error: 'Ya elegiste tu equipo. El anfitrión puede corregirlo antes de comenzar.' });
+      actor.teamKey = payload.teamKey;
+      emitState(room); callback({ ok: true, state: state(room) });
+    });
+
+    receive(socket, 'team:assign', (payload, callback) => {
+      if (!hasOnly(payload, ['participantId', 'teamKey']) || !identifier(payload.participantId) || !['blue', 'red'].includes(payload.teamKey)) return callback({ error: 'Asignación de equipo inválida.' });
+      const { room, actor } = getRoomAndActor(socket);
+      if (!room || !actor || actor.id !== room.hostId || room.mode !== 'teams' || room.teamDuel || room.categoryKey) return callback({ error: 'No se puede modificar equipos ahora.' });
+      const participant = room.players.find(player => player.id === payload.participantId);
+      if (!participant) return callback({ error: 'Participante no encontrado.' });
+      participant.teamKey = payload.teamKey;
+      emitState(room); callback({ ok: true });
+    });
+
     receive(socket, 'room:rejoin', (payload, callback) => {
       if (!hasOnly(payload, ['code', 'participantId', 'reconnectToken'])) return callback({ error: 'No se pudo recuperar tu sesión.' });
       const code = roomCode(payload.code); const participantId = identifier(payload.participantId); const reconnectToken = identifier(payload.reconnectToken);
       const room = rooms.get(code);
+      if (!room) return callback({ error: 'La sala ya no existe en el servidor.', code: 'ROOM_NOT_FOUND' });
       const participant = room && [...room.players, ...room.spectators].find(item => (
         item.id === participantId
         && item.token === reconnectToken
         && Number.isFinite(item.tokenExpiresAt)
         && item.tokenExpiresAt > Date.now()
       ));
-      if (!room || !participant) return callback({ error: 'No se pudo recuperar tu sesión.' });
+      if (!participant) return callback({ error: 'No se pudo recuperar tu sesión.', code: 'SESSION_INVALID' });
       // Un token de reconexión se usa una sola vez. El socket vigente es la única
       // conexión que puede actuar como este participante.
       game.rotateReconnectToken(participant);
@@ -252,7 +276,8 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       if (!hasOnly(payload, ['categoryKey']) || !text(payload.categoryKey, 40)) return callback({ error: 'Categoría inválida.' });
       const categoryKey = payload.categoryKey;
       const { room, actor } = getRoomAndActor(socket);
-      if (!room || actor.id !== room.hostId || !game.selectCategory(room, categoryKey, trivia)) return callback({ error: 'Solo el anfitrión puede elegir una categoría disponible.' });
+      if (!room) return callback({ error: 'La sala ya no existe en el servidor.', code: 'ROOM_NOT_FOUND' });
+      if (!actor || actor.id !== room.hostId || !game.selectCategory(room, categoryKey, trivia)) return callback({ error: 'Solo el anfitrión puede elegir una categoría disponible.' });
       const active = game.startTutorial(room, tutorial);
       emitState(room); if (active) { socket.to(room.code).emit('question:opened', game.publicQuestion(active, trivia)); socket.emit('question:opened', game.publicQuestion(active, trivia)); armTimer(room); }
       callback({ ok: true });
@@ -270,7 +295,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       const { responseMode, isTest, captains = {} } = payload;
       if (!Object.keys(captains).every(key => ['blue', 'red'].includes(key)) || !Object.values(captains).every(value => value === undefined || identifier(value))) return callback({ error: 'Capitanes inválidos.' });
       const { room, actor } = getRoomAndActor(socket);
-      if (!room || actor.id !== room.hostId || room.categoryKey || room.activeQuestion || room.teamDuel?.status === 'playing') return callback({ error: 'No se puede iniciar el duelo ahora.' });
+      if (!room || actor.id !== room.hostId || room.categoryKey || room.activeQuestion || room.teamDuel || (room.mode === 'teams' && responseMode !== room.responseMode)) return callback({ error: 'No se puede iniciar el duelo ahora.' });
       const result = team.createDuel(room, trivia, { responseMode, isTest, captains });
       if (result.error) return callback({ error: result.error });
       if (!isTest) team.startTutorial(room, tutorial);

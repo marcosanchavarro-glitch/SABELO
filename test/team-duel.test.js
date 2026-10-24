@@ -59,6 +59,24 @@ test('tiempo agotado no suma puntos y veinte turnos finalizan sin repetir pregun
   assert.equal(value.teamDuel.turnNumber, 20); assert.equal(value.teamDuel.usedQuestionKeys.size, 20); assert.equal(value.teamDuel.status, 'finished');
 });
 
+test('el resultado final identifica victoria y empate sin alterar puntajes compartidos', () => {
+  const winner = room(2); duel.createDuel(winner, trivia, { responseMode: 'individual', isTest: true });
+  while (winner.teamDuel.status === 'playing') {
+    const active = winner.teamDuel.activeTurn;
+    if (active.teamKey === 'blue') duel.answer(winner, active.responderId, 0, trivia, Date.now());
+    else {
+      duel.answer(winner, active.responderId, 1, trivia, Date.now());
+      if (winner.teamDuel.status === 'playing') duel.answer(winner, winner.teamDuel.activeTurn.responderId, 0, trivia, Date.now());
+    }
+  }
+  assert.equal(winner.teamDuel.result.winner, 'blue'); assert.equal(winner.teamDuel.result.tie, false);
+
+  const tied = room(2); duel.createDuel(tied, trivia, { responseMode: 'individual', isTest: true });
+  while (tied.teamDuel.status === 'playing') duel.answer(tied, tied.teamDuel.activeTurn.responderId, 0, trivia, Date.now());
+  assert.equal(tied.teamDuel.teams.blue.score, tied.teamDuel.teams.red.score);
+  assert.equal(tied.teamDuel.result.tie, true); assert.equal(tied.teamDuel.result.winner, null);
+});
+
 test('el banco bíblico alcanza 60 preguntas y las nuevas pasan la validación estructural', () => {
   const report = validateBiblicalBank(fullTrivia);
   assert.equal(report.total, 60); assert.equal(report.rejected.length, 0); assert.equal(report.approved.length, 30);

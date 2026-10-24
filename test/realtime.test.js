@@ -26,7 +26,7 @@ test('Socket.IO mantiene privacidad, rota el turno y recupera una reconexión', 
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const a = await connect(url); const b = await connect(url); const spectator = await connect(url); clients.push(a, b, spectator);
-  const aJoin = await ack(a, 'room:create', { name: 'A' }); const code = aJoin.state.code;
+  const aJoin = await ack(a, 'room:create', { name: 'A', mode: 'individual', responseMode: null }); const code = aJoin.state.code;
   const bJoin = await ack(b, 'room:join', { code, name: 'B', role: 'jugador' });
   const spectatorJoin = await ack(spectator, 'room:join', { code, name: 'S', role: 'espectador' });
   assert.equal(spectatorJoin.state.players.length, 2);
@@ -74,15 +74,55 @@ test('el creador es anfitrión y los demás roles no pueden seleccionar categor�
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const host = await connect(url); const player = await connect(url); const spectator = await connect(url); clients.push(host, player, spectator);
-  const created = await ack(host, 'room:create', { name: 'Anfitrión' }); const code = created.state.code;
+  assert.equal((await ack(host, 'room:create', { name: 'Sin modalidad' })).error, 'Modalidad de sala inválida.');
+  const created = await ack(host, 'room:create', { name: 'Anfitrión', mode: 'individual', responseMode: null }); const code = created.state.code;
   await ack(player, 'room:join', { code, name: 'Jugador', role: 'jugador' });
   await ack(spectator, 'room:join', { code, name: 'Espectador', role: 'espectador' });
   assert.equal(created.isHost, true);
+  assert.equal(created.state.mode, 'individual');
   assert.equal((await ack(player, 'category:select', { categoryKey: 'demo' })).error, 'Solo el anfitrión puede elegir una categoría disponible.');
   assert.equal((await ack(spectator, 'category:select', { categoryKey: 'demo' })).error, 'Solo el anfitrión puede elegir una categoría disponible.');
   assert.equal((await ack(host, 'category:select', { categoryKey: 'demo' })).ok, true);
   const latePlayer = await connect(url); clients.push(latePlayer);
   assert.equal((await ack(latePlayer, 'room:join', { code, name: 'Tarde', role: 'jugador' })).error, 'La partida ya comenzó; los jugadores deben ingresar antes de la Ronda 0.');
+});
+
+test('una sala de equipos conserva bandos elegidos y exige ambos equipos antes de comenzar', async t => {
+  const tutorial = [{ points: 0, q: 'Práctica', options: ['A', 'B'], correct: 0 }];
+  const { httpServer, io, rooms } = createTriviaServer({ trivia: { ...trivia, biblia: trivia.demo }, tutorial });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const host = await connect(url); const player = await connect(url); clients.push(host, player);
+  const created = await ack(host, 'room:create', { name: 'Host', mode: 'teams', responseMode: 'individual' });
+  const code = created.state.code;
+  assert.equal(created.state.mode, 'teams'); assert.equal(created.state.responseMode, 'individual');
+  assert.deepEqual(created.state.teamLabels, { blue: 'Chicos', red: 'Chicas' });
+  assert.equal(created.isHost, true);
+  assert.equal((await ack(host, 'team:choose', { teamKey: 'green' })).error, 'Equipo inválido.');
+  await ack(host, 'team:choose', { teamKey: 'blue' });
+  assert.equal((await ack(host, 'team:begin', { responseMode: 'individual', isTest: false, captains: {} })).error, 'Se requieren al menos dos jugadores para el duelo.');
+  const joined = await ack(player, 'room:join', { code, name: 'Ana', role: 'jugador' });
+  assert.equal(joined.state.players.find(item => item.id === joined.participantId).teamKey, null);
+  assert.equal((await ack(player, 'room:join', { code, name: 'Ana', role: 'jugador' })).error, 'Ya estás conectado a esta sala.');
+  const teamUpdate = once(host, 'room:state');
+  await ack(player, 'team:choose', { teamKey: 'red' });
+  assert.equal((await teamUpdate).players.find(item => item.id === joined.participantId).teamKey, 'red');
+  assert.equal((await ack(player, 'team:choose', { teamKey: 'blue' })).error, 'Ya elegiste tu equipo. El anfitrión puede corregirlo antes de comenzar.');
+  await ack(host, 'team:assign', { participantId: joined.participantId, teamKey: 'blue' });
+  assert.equal(rooms.get(code).players.find(item => item.id === joined.participantId).teamKey, 'blue');
+  await ack(host, 'team:assign', { participantId: joined.participantId, teamKey: 'red' });
+  player.disconnect();
+  const playerReloaded = await connect(url); clients.push(playerReloaded);
+  const rejoined = await ack(playerReloaded, 'room:rejoin', { code, participantId: joined.participantId, reconnectToken: joined.reconnectToken });
+  assert.equal(rejoined.state.players.find(item => item.id === joined.participantId).teamKey, 'red');
+  const state = rooms.get(code);
+  assert.equal(state.players.find(item => item.id === created.participantId).teamKey, 'blue');
+  assert.equal(state.players.find(item => item.id === joined.participantId).teamKey, 'red');
+  const started = await ack(host, 'team:begin', { responseMode: 'individual', isTest: false, captains: {} });
+  assert.equal(started.ok, true); assert.equal(state.teamDuel.teams.blue.name, 'Chicos'); assert.equal(state.teamDuel.teams.red.name, 'Chicas');
+  assert.equal((await ack(playerReloaded, 'team:choose', { teamKey: 'blue' })).error, 'No podés elegir un equipo ahora.');
 });
 
 test('un token vencido no recupera ni duplica una sesión', async t => {
@@ -92,11 +132,50 @@ test('un token vencido no recupera ni duplica una sesión', async t => {
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const original = await connect(url); clients.push(original);
-  const created = await ack(original, 'room:create', { name: 'A' }); const code = created.state.code;
+  const created = await ack(original, 'room:create', { name: 'A', mode: 'individual', responseMode: null }); const code = created.state.code;
   rooms.get(code).players[0].tokenExpiresAt = Date.now() - 1;
   const refreshed = await connect(url); clients.push(refreshed);
-  assert.equal((await ack(refreshed, 'room:rejoin', { code, participantId: created.participantId, reconnectToken: created.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
+  const rejected = await ack(refreshed, 'room:rejoin', { code, participantId: created.participantId, reconnectToken: created.reconnectToken });
+  assert.equal(rejected.error, 'No se pudo recuperar tu sesión.');
+  assert.equal(rejected.code, 'SESSION_INVALID');
   assert.equal(rooms.get(code).players.length, 1);
+});
+
+test('una sesión informa explícitamente cuando la sala desapareció tras reiniciar el proceso', async t => {
+  const first = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => first.httpServer.listen(0, resolve));
+  const firstUrl = `http://127.0.0.1:${first.httpServer.address().port}`;
+  const original = await connect(firstUrl);
+  const created = await ack(original, 'room:create', { name: 'Persistencia', mode: 'individual', responseMode: null });
+  original.disconnect();
+  first.rooms.forEach(room => clearTimeout(room.timer)); first.io.close(); first.httpServer.close();
+
+  const second = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => second.httpServer.listen(0, resolve));
+  const secondUrl = `http://127.0.0.1:${second.httpServer.address().port}`;
+  const reloaded = await connect(secondUrl);
+  t.after(() => { reloaded.disconnect(); second.rooms.forEach(room => clearTimeout(room.timer)); second.io.close(); second.httpServer.close(); });
+
+  const result = await ack(reloaded, 'room:rejoin', {
+    code: created.state.code,
+    participantId: created.participantId,
+    reconnectToken: created.reconnectToken
+  });
+  assert.equal(result.code, 'ROOM_NOT_FOUND');
+  assert.equal(result.error, 'La sala ya no existe en el servidor.');
+});
+
+test('una selección de categoría distingue una sala ausente de un error de permisos', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`;
+  const client = await connect(url);
+  t.after(() => { client.disconnect(); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+  const created = await ack(client, 'room:create', { name: 'Anfitrión', mode: 'individual', responseMode: null });
+  rooms.delete(created.state.code);
+  const result = await ack(client, 'category:select', { categoryKey: 'demo' });
+  assert.equal(result.code, 'ROOM_NOT_FOUND');
+  assert.equal(result.error, 'La sala ya no existe en el servidor.');
 });
 
 test('cambiar de sala revoca en servidor el token anterior y conserva el nuevo', async t => {
@@ -106,11 +185,11 @@ test('cambiar de sala revoca en servidor el token anterior y conserva el nuevo',
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const original = await connect(url); clients.push(original);
-  const roomA = await ack(original, 'room:create', { name: 'A' });
+  const roomA = await ack(original, 'room:create', { name: 'A', mode: 'individual', responseMode: null });
   original.disconnect();
   const recovered = await connect(url); clients.push(recovered);
   const recoveredA = await ack(recovered, 'room:rejoin', { code: roomA.state.code, participantId: roomA.participantId, reconnectToken: roomA.reconnectToken });
-  const roomB = await ack(recovered, 'room:create', { name: 'B' });
+  const roomB = await ack(recovered, 'room:create', { name: 'B', mode: 'individual', responseMode: null });
   assert.equal(roomB.ok, true);
   const attacker = await connect(url); clients.push(attacker);
   assert.equal((await ack(attacker, 'room:rejoin', { code: roomA.state.code, participantId: roomA.participantId, reconnectToken: recoveredA.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
@@ -119,8 +198,8 @@ test('cambiar de sala revoca en servidor el token anterior y conserva el nuevo',
   assert.equal((await ack(recoveredB, 'room:rejoin', { code: roomB.state.code, participantId: roomB.participantId, reconnectToken: roomB.reconnectToken })).ok, true);
 
   const targetHost = await connect(url); const joiningSource = await connect(url); clients.push(targetHost, joiningSource);
-  const target = await ack(targetHost, 'room:create', { name: 'Destino' });
-  const source = await ack(joiningSource, 'room:create', { name: 'Origen' });
+  const target = await ack(targetHost, 'room:create', { name: 'Destino', mode: 'individual', responseMode: null });
+  const source = await ack(joiningSource, 'room:create', { name: 'Origen', mode: 'individual', responseMode: null });
   const joined = await ack(joiningSource, 'room:join', { code: target.state.code, name: 'Cambio', role: 'jugador' });
   assert.equal(joined.ok, true);
   const oldReplay = await connect(url); clients.push(oldReplay);
@@ -135,7 +214,7 @@ test('recargar al anfitrión durante Ronda 0 conserva sesión, tutorial y tempor
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const host = await connect(url); const player = await connect(url); clients.push(host, player);
-  const created = await ack(host, 'room:create', { name: 'A' }); const code = created.state.code;
+  const created = await ack(host, 'room:create', { name: 'A', mode: 'individual', responseMode: null }); const code = created.state.code;
   const joined = await ack(player, 'room:join', { code, name: 'B', role: 'jugador' });
   await ack(host, 'category:select', { categoryKey: 'demo' });
   const before = rooms.get(code).activeQuestion.endsAt;
@@ -167,7 +246,7 @@ test('Ronda 0 se sincroniza, rechaza eventos atrasados y deja lista la competenc
   const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
   const a = await connect(url); const b = await connect(url); const spectator = await connect(url); clients.push(a, b, spectator);
-  const created = await ack(a, 'room:create', { name: 'A' }); const code = created.state.code;
+  const created = await ack(a, 'room:create', { name: 'A', mode: 'individual', responseMode: null }); const code = created.state.code;
   await ack(b, 'room:join', { code, name: 'B', role: 'jugador' });
   await ack(spectator, 'room:join', { code, name: 'S', role: 'espectador' });
   const opened = once(spectator, 'question:opened'); await ack(a, 'category:select', { categoryKey: 'demo' });
@@ -194,9 +273,9 @@ test('Socket.IO rechaza payloads malformados y aplica límites sin detener el se
     const response = await ack(host, event, null);
     assert.equal(typeof response.error, 'string');
   }
-  const created = await ack(host, 'room:create', { name: 'A' }); const code = created.state.code;
+  const created = await ack(host, 'room:create', { name: 'A', mode: 'individual', responseMode: null }); const code = created.state.code;
   assert.match(code, /^SABELO-[A-Z2-9]{8}$/);
-  assert.equal((await ack(other, 'room:create', { name: 'B' })).error, 'No se pueden crear más salas en este momento.');
+  assert.equal((await ack(other, 'room:create', { name: 'B', mode: 'individual', responseMode: null })).error, 'No se pueden crear más salas en este momento.');
   assert.equal((await ack(other, 'room:join', { code, name: 'B', role: 'jugador' })).error, 'La sala alcanzó el máximo de jugadores.');
   assert.equal((await ack(host, 'category:select', { categoryKey: 'demo', isHost: true })).error, 'Categoría inválida.');
   assert.equal(rooms.size, 1);

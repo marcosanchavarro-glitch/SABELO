@@ -1,6 +1,7 @@
 // Cliente SABELO: solo consume estado público. Las respuestas correctas viven en el servidor.
 const socket = io();
 const SESSION_KEY = 'sabelo-reconnect-session';
+const ACTION_TIMEOUT_MS = 8000;
 let roomState = null;
 let roomAction = 'unirse';
 let playerRole = 'jugador';
@@ -14,6 +15,9 @@ let teamSetupIsTest = false;
 let reboundNotice = false;
 let currentQuestionId = null;
 let identityRequest = 0;
+let pendingAction = null;
+let restoreTimeout = null;
+let roomCreateConfig = { mode: 'individual', responseMode: null };
 
 const categoryIcons = {
   cultura: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22"/><path d="M10 32h44M32 10c7 7 10 15 10 22s-3 15-10 22c-7-7-10-15-10-22s3-15 10-22Z"/></svg>',
@@ -32,6 +36,55 @@ function changeScreen(id) {
   document.querySelectorAll('.screen').forEach(screen => screen.classList.toggle('active', screen.id === id));
 }
 function notifyError(message) { window.alert(message); }
+function setConnectionStatus(state, message) {
+  const status = document.getElementById('connection-status');
+  status.dataset.state = state;
+  status.textContent = message;
+}
+function setActionStatus(message = '') {
+  const status = document.getElementById('action-status');
+  status.hidden = !message;
+  status.textContent = message;
+}
+function resetToIdentity(message = '') {
+  clearInterval(timerInterval);
+  roomState = null; currentTeamQuestion = null; pendingQuestion = null; isHost = false;
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById('header-user-info').style.display = 'none';
+  changeScreen('screen-identity');
+  if (message) notifyError(message);
+}
+function finishPendingAction() {
+  if (!pendingAction) return;
+  clearTimeout(pendingAction.timer);
+  if (pendingAction.button) pendingAction.button.disabled = false;
+  pendingAction = null;
+  setActionStatus('');
+}
+function sendAction(event, payload, { label, button, onSuccess, onError }) {
+  if (!socket.connected) {
+    setActionStatus('Sin conexión. Esperá a que SABELO se reconecte antes de continuar.');
+    return notifyError('No hay conexión con la sala. Intentá nuevamente cuando figure “Conectado”.');
+  }
+  if (pendingAction) return;
+  if (button) button.disabled = true;
+  setActionStatus(label);
+  const timer = setTimeout(() => {
+    const wasCreateOrJoin = event === 'room:create' || event === 'room:join';
+    finishPendingAction();
+    const message = wasCreateOrJoin
+      ? 'No recibimos confirmación. La solicitud podría haberse procesado; no la repitas hasta actualizar la página.'
+      : 'No recibimos confirmación del servidor. Revisá la conexión e intentá de nuevo.';
+    setActionStatus(message);
+    notifyError(message);
+  }, ACTION_TIMEOUT_MS);
+  pendingAction = { timer, button };
+  socket.emit(event, payload, response => {
+    finishPendingAction();
+    if (response?.error) return onError ? onError(response) : reportError(response);
+    onSuccess?.(response || {});
+  });
+}
 function escapeHtml(value) { const node = document.createElement('span'); node.textContent = value; return node.innerHTML; }
 function session() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } }
 function saveSession(data) { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); }
@@ -75,12 +128,38 @@ function irASala() {
 function mostrarOpcionSala(action) {
   if (action === 'crear' && playerRole === 'espectador') return;
   roomAction = action;
+  if (action === 'crear') {
+    seleccionarModalidadSala('individual');
+    return changeScreen('screen-create-config');
+  }
   const input = document.getElementById('input-room');
   document.getElementById('room-action-container').style.display = 'block';
   document.getElementById('room-input-label').textContent = action === 'crear' ? 'Código seguro (se genera al crear la sala)' : 'Código de sala existente';
   document.getElementById('btn-room-action').textContent = action === 'crear' ? 'Crear sala' : 'Unirme';
   input.value = '';
   input.disabled = action === 'crear';
+}
+
+function seleccionarModalidadSala(mode) {
+  roomCreateConfig.mode = mode;
+  roomCreateConfig.responseMode = mode === 'teams' ? 'individual' : null;
+  document.querySelectorAll('[data-room-mode]').forEach(button => button.classList.toggle('active-role', button.dataset.roomMode === mode));
+  document.getElementById('team-response-options').hidden = mode !== 'teams';
+  document.getElementById('btn-create-config').textContent = mode === 'teams' ? 'Crear sala por equipos' : 'Crear sala individual';
+  seleccionarRespuestaEquipo(roomCreateConfig.responseMode || 'individual');
+}
+function seleccionarRespuestaEquipo(responseMode) {
+  roomCreateConfig.responseMode = roomCreateConfig.mode === 'teams' ? responseMode : null;
+  document.querySelectorAll('[data-response-mode]').forEach(button => button.classList.toggle('active-role', button.dataset.responseMode === responseMode));
+}
+function crearSalaConfigurada() {
+  const requestId = ++identityRequest;
+  const button = document.getElementById('btn-create-config');
+  sendAction('room:create', { name: playerName, ...roomCreateConfig }, {
+    label: 'Creando sala…', button,
+    onSuccess: response => acceptRoom(response, response.state?.code, requestId),
+    onError: response => notifyError(response.error || 'No se pudo crear la sala.')
+  });
 }
 
 function acceptRoom(response, code, requestId) {
@@ -101,26 +180,44 @@ function procesarIngresoSala() {
   if (event === 'room:join' && !code) return notifyError('Ingresá un código de sala válido.');
   const requestId = ++identityRequest;
   const payload = event === 'room:create' ? { name: playerName } : { code, name: playerName, role: playerRole };
-  socket.emit(event, payload, response => acceptRoom(response, code, requestId));
+  sendAction(event, payload, {
+    label: event === 'room:create' ? 'Creando sala…' : 'Uniéndote a la sala…',
+    button: document.getElementById('btn-room-action'),
+    onSuccess: response => acceptRoom(response, code, requestId),
+    onError: response => notifyError(response.error || 'No se pudo completar la operación.')
+  });
 }
 
 function restoreSession() {
   const saved = session();
-  if (!saved) return;
+  if (!saved || !socket.connected || pendingAction) return;
   const requestId = identityRequest;
+  clearTimeout(restoreTimeout);
+  restoreTimeout = setTimeout(() => {
+    setActionStatus('No pudimos confirmar la sesión todavía. Verificá tu conexión antes de continuar.');
+  }, ACTION_TIMEOUT_MS);
   socket.emit('room:rejoin', saved, response => {
+    clearTimeout(restoreTimeout);
     // Una creación/unión iniciada después de la restauración siempre prevalece.
     // Así una respuesta atrasada no puede convertir al nuevo anfitrión en otra sesión.
     if (requestId !== identityRequest || !sameSession(session(), saved)) return;
-    if (response.error) return localStorage.removeItem(SESSION_KEY);
+    if (response?.error) {
+      const message = response.code === 'ROOM_NOT_FOUND'
+        ? 'La sala ya no existe en el servidor. Volvé a crearla o unirte a una sala activa.'
+        : 'No se pudo recuperar tu sesión. Volvé a ingresar a una sala.';
+      return resetToIdentity(message);
+    }
     acceptRoom(response, saved.code, requestId);
   });
 }
 
-socket.on('connect', restoreSession);
+socket.on('connect', () => { setConnectionStatus('connected', 'Conectado'); restoreSession(); });
+socket.on('disconnect', () => { clearTimeout(restoreTimeout); setConnectionStatus('reconnecting', 'Reconectando…'); });
+socket.on('connect_error', () => setConnectionStatus('disconnected', 'Sin conexión'));
 socket.on('room:state', state => {
   // Un evento de una sala anterior nunca puede conservar permisos visuales.
-  if (!sameSession(session(), { ...session(), code: state.code })) return;
+  const saved = session();
+  if (!sameSession(saved, { ...saved, code: state.code })) return;
   roomState = state;
   syncIdentityFromState();
   renderState();
@@ -133,7 +230,7 @@ socket.on('team:turn', payload => { currentTeamQuestion = payload; if (!transiti
 socket.on('team:result', result => showTeamResult(result));
 socket.on('team:finished', duel => renderTeamFinished(duel));
 socket.on('tutorial:step-complete', () => { /* el estado público siguiente determina la pantalla de espera */ });
-socket.on('room:closed', () => { localStorage.removeItem(SESSION_KEY); notifyError('La sala fue cerrada por el anfitrión.'); changeScreen('screen-home'); });
+socket.on('room:closed', () => resetToIdentity('La sala fue cerrada por el anfitrión.'));
 
 function ownPlayer() { return roomState?.players.find(player => player.id === session()?.participantId); }
 function turnPlayer() { return roomState?.players.find(player => player.id === roomState.turnPlayerId); }
@@ -144,6 +241,11 @@ function renderState() {
   const own = ownPlayer();
   document.getElementById('current-score').textContent = own ? own.score : '—';
   if (transitionPending) return;
+  if (roomState.mode === 'teams' && !roomState.teamDuel && !roomState.categoryKey) {
+    const isSpectator = roomState.spectators.some(spectator => spectator.id === session()?.participantId);
+    if (!isSpectator && !own?.teamKey) return renderTeamChoice();
+    return renderTeamLobby();
+  }
   if (roomState.teamDuel?.status === 'tutorial') return roomState.teamDuel.activeTurn ? renderTeamTurn() : renderTutorialWaiting();
   if (roomState.tutorial) return roomState.activeQuestion ? undefined : renderTutorialWaiting();
   if (roomState.teamDuel?.status === 'playing') return currentTeamQuestion ? renderTeamTurn() : undefined;
@@ -151,6 +253,71 @@ function renderState() {
   if (!roomState.categoryKey) return renderCategories();
   renderBoard();
   if (roomState.activeQuestion && document.getElementById('screen-question').classList.contains('active')) startTimer(roomState.activeQuestion.endsAt);
+}
+
+function renderTeamChoice() {
+  changeScreen('screen-team-choice');
+}
+function elegirBando(teamKey) {
+  sendAction('team:choose', { teamKey }, {
+    label: 'Guardando tu bando…',
+    onSuccess: () => {},
+    onError: reportError
+  });
+}
+function integrantesPorEquipo() {
+  const groups = { blue: [], red: [] };
+  roomState.players.forEach((player, index) => {
+    const key = roomState.mode === 'teams' ? player.teamKey : (index % 2 ? 'red' : 'blue');
+    if (groups[key]) groups[key].push(player);
+  });
+  return groups;
+}
+function renderTeamLobby() {
+  const groups = integrantesPorEquipo();
+  const labels = roomState.teamLabels || { blue: 'Chicos', red: 'Chicas' };
+  const note = document.getElementById('team-lobby-note');
+  const pending = roomState.players.filter(player => !player.teamKey);
+  note.textContent = pending.length
+    ? `Falta elegir bando: ${pending.map(player => player.name).join(', ')}.`
+    : 'Equipos listos. El anfitrión puede preparar la Ronda 0.';
+  const roster = document.getElementById('team-lobby-rosters'); roster.replaceChildren();
+  ['blue', 'red'].forEach(teamKey => {
+    const panel = document.createElement('section'); panel.className = `team-roster ${teamKey}`;
+    const members = groups[teamKey];
+    panel.innerHTML = `<p class="team-choice-kicker">${teamKey === 'blue' ? 'EQUIPO AZUL' : 'EQUIPO ROJO'}</p><h3>${labels[teamKey]}</h3><p class="team-roster-count">${members.length} integrante${members.length === 1 ? '' : 's'}</p>`;
+    const list = document.createElement('ul');
+    members.forEach(player => {
+      const item = document.createElement('li');
+      item.textContent = `${player.name}${player.connected ? '' : ' · desconectado'}`;
+      if (isHost) {
+        const move = document.createElement('button'); move.className = 'team-move'; move.textContent = `Mover a ${labels[teamKey === 'blue' ? 'red' : 'blue']}`;
+        move.onclick = () => asignarEquipo(player.id, teamKey === 'blue' ? 'red' : 'blue'); item.append(move);
+      }
+      list.append(item);
+    });
+    panel.append(list); roster.append(panel);
+  });
+  if (isHost && pending.length) {
+    const panel = document.createElement('section'); panel.className = 'team-roster pending'; panel.innerHTML = '<p class="team-choice-kicker">PENDIENTES</p><h3>Sin bando</h3>';
+    const list = document.createElement('ul');
+    pending.forEach(player => {
+      const item = document.createElement('li'); item.textContent = player.name;
+      ['blue', 'red'].forEach(teamKey => { const move = document.createElement('button'); move.className = 'team-move'; move.textContent = `Asignar a ${labels[teamKey]}`; move.onclick = () => asignarEquipo(player.id, teamKey); item.append(move); });
+      list.append(item);
+    }); panel.append(list); roster.append(panel);
+  }
+  const start = document.getElementById('team-lobby-start');
+  const ready = !pending.length && groups.blue.length > 0 && groups.red.length > 0;
+  start.hidden = !isHost; start.disabled = !ready;
+  changeScreen('screen-team-lobby');
+}
+function asignarEquipo(participantId, teamKey) {
+  sendAction('team:assign', { participantId, teamKey }, { label: 'Actualizando equipos…', onSuccess: () => {}, onError: reportError });
+}
+function prepararDueloConfigurado() {
+  if (!isHost) return;
+  abrirConfiguracionDuelo(false);
 }
 
 function renderCategories() {
@@ -162,7 +329,7 @@ function renderCategories() {
   Object.entries(roomState.catalog).forEach(([key, category]) => {
     const card = document.createElement('button'); card.className = 'category-card';
     card.innerHTML = `<span class="category-icon">${categoryIcons[key] || categoryIcons.random}</span><h3>${escapeHtml(displayTitle(category.title))}</h3><p>Subcategorías · tablero de puntajes</p>`;
-    card.disabled = !isHost;
+    card.disabled = !isHost || Boolean(pendingAction);
     card.onclick = () => selectCategory(key);
     container.append(card);
   });
@@ -178,24 +345,24 @@ function renderCategories() {
 }
 function selectCategory(categoryKey) {
   if (!isHost) return notifyError('Esperando la confirmación de tu sesión de anfitrión. Actualizá la página si el problema continúa.');
-  socket.emit('category:select', { categoryKey }, response => {
-    if (!response?.error) return;
+  sendAction('category:select', { categoryKey }, {
+    label: 'Iniciando categoría…',
+    onSuccess: () => {},
+    onError: response => {
     // Safari y navegadores integrados pueden reconectar el socket sin recargar
     // la vista. Reautenticar el token vigente devuelve la identidad al socket.
+    if (response.code === 'ROOM_NOT_FOUND') return resetToIdentity('La sala ya no existe en el servidor.');
     if (response.error === 'Solo el anfitrión puede elegir una categoría disponible.') return restoreSession();
     reportError(response);
+    }
   });
 }
 
-function integrantesPorEquipo() {
-  const groups = { blue: [], red: [] };
-  roomState.players.forEach((player, index) => groups[index % 2 ? 'red' : 'blue'].push(player));
-  return groups;
-}
 function abrirConfiguracionDuelo(isTest) {
   if (!isHost) return;
   if (roomState.players.length < 2) return notifyError('Se requieren al menos dos jugadores para formar los equipos.');
   teamSetupIsTest = isTest;
+  if (!isTest && roomState.mode === 'teams') document.getElementById('team-response-mode').value = roomState.responseMode;
   document.getElementById('team-setup-test-badge').hidden = !isTest;
   const teams = integrantesPorEquipo();
   document.getElementById('team-config-note').textContent = `Asignación automática: Azul (${teams.blue.map(p => p.name).join(', ')}) vs. Rojo (${teams.red.map(p => p.name).join(', ')}).`;
@@ -212,7 +379,7 @@ function actualizarCapitanes() {
 function iniciarDueloEquipos() {
   const responseMode = document.getElementById('team-response-mode').value;
   const captains = { blue: document.getElementById('blue-captain').value, red: document.getElementById('red-captain').value };
-  socket.emit('team:begin', { responseMode, isTest: teamSetupIsTest, captains }, reportError);
+  sendAction('team:begin', { responseMode, isTest: teamSetupIsTest, captains }, { label: 'Iniciando Ronda 0…', onSuccess: () => {}, onError: reportError });
 }
 
 function renderTurnStatus() {
@@ -338,19 +505,26 @@ function showTeamResult(result) {
 function renderTeamFinished(duel) {
   clearInterval(timerInterval); currentTeamQuestion = null;
   const blue = duel.teams.blue; const red = duel.teams.red;
-  const text = duel.result.tie ? `Empate: Azul ${blue.score} · Rojo ${red.score}` : `Ganó ${duel.result.winner === 'blue' ? blue.name : red.name}: ${blue.score} · ${red.score}`;
-  document.getElementById('final-message').textContent = `${duel.isTest ? 'MODO PRUEBA · ' : ''}Duelo finalizado. ${text}`;
-  document.querySelector('#screen-gameover .btn-primary').style.display = isHost ? '' : 'none'; changeScreen('screen-gameover');
+  const winner = duel.result.winner === 'blue' ? blue : duel.result.winner === 'red' ? red : null;
+  document.getElementById('team-final-title').textContent = duel.result.tie ? '¡Empate!' : `¡Ganaron ${winner.name}!`;
+  document.getElementById('team-final-message').textContent = duel.isTest ? 'Modo prueba finalizado' : duel.result.tie ? 'Los equipos terminaron con la misma puntuación.' : `${winner.name} se impuso en el duelo.`;
+  document.getElementById('team-final-scores').innerHTML = ['blue', 'red'].map(key => {
+    const entry = duel.teams[key]; return `<div class="team-final-score ${key}"><span>${key === 'blue' ? 'EQUIPO AZUL' : 'EQUIPO ROJO'}</span><strong>${escapeHtml(entry.name)}</strong><b>${entry.score} puntos</b></div>`;
+  }).join('');
+  document.getElementById('team-final-reset').hidden = !isHost;
+  changeScreen('screen-team-final');
 }
 
 function renderPodium() {
   if (!roomState?.categoryKey) return;
   clearInterval(timerInterval);
-  const leaders = [...roomState.players].sort((a, b) => b.score - a.score).slice(0, 3);
-  const medals = ['🥇', '🥈', '🥉'];
-  document.getElementById('final-message').innerHTML = `<strong>Podio de ${escapeHtml(displayTitle(roomState.catalog[roomState.categoryKey].title))}</strong><br><br>${leaders.map((player, index) => `${medals[index]} ${escapeHtml(player.name)} — ${player.score} pts`).join('<br>')}`;
-  document.querySelector('#screen-gameover .btn-primary').style.display = isHost ? '' : 'none';
-  changeScreen('screen-gameover');
+  const ranked = [...roomState.players].sort((a, b) => b.score - a.score).map((player, index, list) => ({ ...player, rank: index && player.score === list[index - 1].score ? list[index - 1].rank : index + 1 }));
+  const leaders = ranked.slice(0, 3);
+  document.getElementById('podium-title').textContent = `Podio · ${displayTitle(roomState.catalog[roomState.categoryKey].title)}`;
+  document.getElementById('podium-leaders').innerHTML = leaders.map(player => `<article class="podium-place"><span>PUESTO ${player.rank}</span><strong>${escapeHtml(player.name)}</strong><b>${player.score} puntos</b></article>`).join('');
+  document.getElementById('podium-ranking').innerHTML = ranked.map(player => `<p><span>${player.rank}. ${escapeHtml(player.name)}</span><b>${player.score} puntos</b></p>`).join('');
+  document.getElementById('podium-reset').hidden = !isHost;
+  changeScreen('screen-podium');
 }
 
 function reportError(response) { if (response?.error) notifyError(response.error); }
