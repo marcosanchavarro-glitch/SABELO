@@ -3,27 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SABELO - Trivia Interactiva</title>
+    <title>SABELO · Concurso en vivo</title>
+    <meta name="theme-color" content="#10192B">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="broadcast-shell">
 
-    <div class="container">
+    <div class="container stage-frame">
         <!-- CABECERA GENERAL -->
-        <header>
-            <h1>SABELO 📺</h1>
+        <header class="studio-header">
+            <div class="brand-lockup"><h1>SABELO</h1><span>CONCURSO EN VIVO</span></div>
             <div class="user-info" id="header-user-info" style="display: none;">
-                <span>👤 <strong id="lbl-username">Jugador</strong></span>
-                <span>🏷️ <strong id="lbl-role">Jugador</strong></span>
-                <span>🔑 <strong id="lbl-room">SALA</strong></span>
+                <span><small>EN SALA</small><strong id="lbl-username">Jugador</strong></span>
+                <span><small>ROL</small><strong id="lbl-role">Jugador</strong></span>
+                <span><small>CÓDIGO</small><strong id="lbl-room">SALA</strong></span>
                 <div class="score-board">Tus puntos: <span id="current-score">0</span></div>
             </div>
         </header>
 
         <!-- PANTALLA 1: INGRESO DE IDENTIDAD Y ROL -->
-        <div id="screen-identity" class="screen active">
-            <h2 style="font-size: 1.3rem; margin-bottom: 5px;">Bienvenido al Concurso</h2>
-            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px;">Ingresá tu nombre y elegí cómo querés participar en la sala.</p>
+        <div id="screen-identity" class="screen active identity-screen">
+            <div class="show-intro"><span class="live-pill">EN VIVO</span><p class="eyebrow">TEMPORADA DIGITAL</p><h2>Tu lugar está<br>en el tablero.</h2><p>Ingresá tu alias y elegí cómo querés vivir el concurso.</p></div>
             
             <div class="form-group">
                 <label>Tu Nombre / Alias</label>
@@ -34,11 +34,11 @@
                 <label>Rol en la Partida</label>
                 <div class="mode-selection" style="grid-template-columns: 1fr 1fr;">
                     <button type="button" class="btn-mode active-role" id="btn-role-player" onclick="seleccionarRol('jugador')">
-                        <h3>🎮 Jugador</h3>
+                        <h3>Jugador</h3>
                         <p>Participa respondiendo y acumulando puntos.</p>
                     </button>
                     <button type="button" class="btn-mode" id="btn-role-spectator" onclick="seleccionarRol('espectador')">
-                        <h3>👁️ Espectador</h3>
+                        <h3>Espectador</h3>
                         <p>Sigue las alternativas y puntajes en tiempo real.</p>
                     </button>
                 </div>
@@ -48,17 +48,17 @@
         </div>
 
         <!-- PANTALLA 2: GESTIÓN DE SALA -->
-        <div id="screen-room" class="screen">
-            <h2 style="font-size: 1.3rem; margin-bottom: 5px;">Gestión de Sala</h2>
-            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px;">Creá una sala nueva (serás el anfitrión con control total de las categorías) o unite a una existente.</p>
+        <div id="screen-room" class="screen room-screen">
+            <p class="eyebrow">SALA DE CONCURSO</p><h2>Prepará la transmisión</h2>
+            <p class="screen-lede">Creá una sala como anfitrión o ingresá con el código compartido.</p>
 
             <div class="mode-selection" style="margin-bottom: 25px;">
                 <button id="create-room-option" type="button" class="btn-mode" onclick="mostrarOpcionSala('crear')">
-                    <h3>➕ Crear Sala</h3>
+                    <h3>Crear sala</h3>
                     <p>Sé el anfitrión y controlá la elección de categorías.</p>
                 </button>
                 <button type="button" class="btn-mode" onclick="mostrarOpcionSala('unirse')">
-                    <h3>🔗 Unirse a Sala</h3>
+                    <h3>Unirse a sala</h3>
                     <p>Ingresá con el código provisto por el anfitrión.</p>
                 </button>
             </div>
@@ -74,25 +74,25 @@
             </div>
 
             <div>
-                <button class="btn-secondary" onclick="cambiarPantalla('screen-identity')">← Volver</button>
+                <button class="btn-secondary" onclick="changeScreen('screen-identity')">Volver</button>
             </div>
         </div>
 
         <!-- PANTALLA 3: SELECCIÓN DE LAS 9 CATEGORÍAS PRINCIPALES -->
-        <div id="screen-categories" class="screen">
+        <div id="screen-categories" class="screen categories-screen">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <h2 style="font-size: 1.2rem; color: var(--accent);">Categorías Principales</h2>
+                    <p class="eyebrow">SELECCIÓN DEL ANFITRIÓN</p><h2>Categorías principales</h2>
                     <p style="color: var(--text-muted); font-size: 0.9rem;">Seleccioná un bloque temático para ver sus subcategorías.</p>
                 </div>
-                <button class="btn-secondary" onclick="cambiarPantalla('screen-room')">Cambiar Sala</button>
+                <button class="btn-secondary" onclick="changeScreen('screen-room')">Cambiar sala</button>
             </div>
 
             <div class="categories-grid" id="main-categories-container"></div>
         </div>
 
         <div id="screen-team-setup" class="screen">
-            <h2 style="color: var(--accent);">Duelo de Equipos <span id="team-setup-test-badge" class="test-badge" hidden>MODO PRUEBA</span></h2>
+            <p class="eyebrow">FORMATO ESPECIAL</p><h2>Duelo de equipos <span id="team-setup-test-badge" class="test-badge" hidden>MODO PRUEBA</span></h2>
             <p id="team-config-note" style="color: var(--text-muted); margin: 10px 0 20px;"></p>
             <div class="form-group">
                 <label for="team-response-mode">Modalidad de respuesta</label>
@@ -114,7 +114,7 @@
         <div id="screen-subcategories" class="screen">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <h2 id="active-category-title" style="font-size: 1.1rem; color: var(--accent);">Categoría</h2>
+                <p class="eyebrow">TABLERO EN JUEGO</p><h2 id="active-category-title">Categoría</h2>
                     <p style="color: var(--text-muted); font-size: 0.85rem;">Elegí una subcategoría y su nivel de puntos:</p>
                 </div>
                 <button id="btn-exit-match" class="btn-secondary" onclick="volverACategorias()">Finalizar partida</button>
@@ -130,6 +130,7 @@
 
         <!-- PANTALLA 5: PREGUNTA ACTIVA -->
         <div id="screen-question" class="screen">
+            <div class="broadcast-topline"><span class="live-pill">EN VIVO</span><div id="broadcast-scoreboard" class="broadcast-scoreboard" aria-label="Marcador en vivo"></div></div>
             <div class="question-meta">
                 <span id="q-category">Subcategoría</span>
                 <span id="q-points" style="color: var(--accent); font-weight: bold;">Valor: 0 pts</span>
@@ -148,6 +149,7 @@
         </div>
 
         <div id="screen-team-question" class="screen">
+            <div class="broadcast-topline"><span class="live-pill">EN VIVO</span></div>
             <div id="team-test-badge" class="test-badge" hidden>MODO PRUEBA</div>
             <div class="question-meta"><span id="team-progress">Ronda 1 de 10</span><span id="team-active-label" style="color: var(--accent); font-weight: bold;"></span></div>
             <div id="team-scores" class="team-scores"></div>
@@ -160,7 +162,7 @@
         <!-- PANTALLA 6: FIN DE PARTIDA / BLOQUE -->
         <div id="screen-gameover" class="screen">
             <div class="game-over-box">
-                <h2 style="font-size: 2rem; margin-bottom: 15px;">🏁 ¡Desafío Completado!</h2>
+                <p class="eyebrow">TRANSMISIÓN FINALIZADA</p><h2>Fin de la partida</h2>
                 <p id="final-message" style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 25px;">Repasaste las preguntas de este bloque.</p>
                 <button class="btn-primary" onclick="reiniciarJuegoCompleto()">Elegir Otra Categoría</button>
             </div>

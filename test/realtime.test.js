@@ -26,9 +26,9 @@ test('Socket.IO mantiene privacidad, rota el turno y recupera una reconexión', 
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
 
   const a = await connect(url); const b = await connect(url); const spectator = await connect(url); clients.push(a, b, spectator);
-  const aJoin = await ack(a, 'room:create', { code: 'REAL', name: 'A' });
-  const bJoin = await ack(b, 'room:join', { code: 'REAL', name: 'B', role: 'jugador' });
-  const spectatorJoin = await ack(spectator, 'room:join', { code: 'REAL', name: 'S', role: 'espectador' });
+  const aJoin = await ack(a, 'room:create', { name: 'A' }); const code = aJoin.state.code;
+  const bJoin = await ack(b, 'room:join', { code, name: 'B', role: 'jugador' });
+  const spectatorJoin = await ack(spectator, 'room:join', { code, name: 'S', role: 'espectador' });
   assert.equal(spectatorJoin.state.players.length, 2);
   await ack(a, 'category:select', { categoryKey: 'demo' });
 
@@ -44,13 +44,20 @@ test('Socket.IO mantiene privacidad, rota el turno y recupera una reconexión', 
   assert.equal(response.ok, true); assert.deepEqual(Object.keys(result).sort(), ['playerId', 'playerName', 'status']);
   assert.equal(result.status, 'incorrect'); assert.equal(Object.hasOwn(result, 'correct'), false);
   assert.equal(JSON.stringify(passed).includes('correct'), false);
+  const reboundEndsAt = rooms.get(code).activeQuestion.endsAt;
 
   b.disconnect();
   const b2 = await connect(url); clients.push(b2);
-  const recovered = await ack(b2, 'room:rejoin', { code: 'REAL', participantId: bJoin.participantId, reconnectToken: bJoin.reconnectToken });
+  const recovered = await ack(b2, 'room:rejoin', { code, participantId: bJoin.participantId, reconnectToken: bJoin.reconnectToken });
   assert.equal(recovered.state.turnPlayerId, bJoin.participantId);
   assert.equal(recovered.state.activeQuestion.qIndex, 0);
+  assert.equal(recovered.state.activeQuestion.endsAt, reboundEndsAt);
+  assert.notEqual(recovered.reconnectToken, bJoin.reconnectToken);
+  assert.equal(recovered.state.players.length, 2);
   assert.equal(aJoin.state.catalog.demo.subcategories.general.questions[0].correct, undefined);
+
+  const replay = await connect(url); clients.push(replay);
+  assert.equal((await ack(replay, 'room:rejoin', { code, participantId: bJoin.participantId, reconnectToken: bJoin.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
 
   const finalResultEvent = once(spectator, 'answer:result');
   const closedEvent = once(spectator, 'question:closed');
@@ -58,6 +65,96 @@ test('Socket.IO mantiene privacidad, rota el turno y recupera una reconexión', 
   const finalResult = await finalResultEvent; const closed = await closedEvent;
   assert.equal(finalResult.status, 'incorrect'); assert.equal(Object.hasOwn(finalResult, 'correct'), false);
   assert.equal(Object.hasOwn(closed, 'correct'), false);
+});
+
+test('el creador es anfitrión y los demás roles no pueden seleccionar categorías', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const host = await connect(url); const player = await connect(url); const spectator = await connect(url); clients.push(host, player, spectator);
+  const created = await ack(host, 'room:create', { name: 'Anfitrión' }); const code = created.state.code;
+  await ack(player, 'room:join', { code, name: 'Jugador', role: 'jugador' });
+  await ack(spectator, 'room:join', { code, name: 'Espectador', role: 'espectador' });
+  assert.equal(created.isHost, true);
+  assert.equal((await ack(player, 'category:select', { categoryKey: 'demo' })).error, 'Solo el anfitrión puede elegir una categoría disponible.');
+  assert.equal((await ack(spectator, 'category:select', { categoryKey: 'demo' })).error, 'Solo el anfitrión puede elegir una categoría disponible.');
+  assert.equal((await ack(host, 'category:select', { categoryKey: 'demo' })).ok, true);
+  const latePlayer = await connect(url); clients.push(latePlayer);
+  assert.equal((await ack(latePlayer, 'room:join', { code, name: 'Tarde', role: 'jugador' })).error, 'La partida ya comenzó; los jugadores deben ingresar antes de la Ronda 0.');
+});
+
+test('un token vencido no recupera ni duplica una sesión', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const original = await connect(url); clients.push(original);
+  const created = await ack(original, 'room:create', { name: 'A' }); const code = created.state.code;
+  rooms.get(code).players[0].tokenExpiresAt = Date.now() - 1;
+  const refreshed = await connect(url); clients.push(refreshed);
+  assert.equal((await ack(refreshed, 'room:rejoin', { code, participantId: created.participantId, reconnectToken: created.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
+  assert.equal(rooms.get(code).players.length, 1);
+});
+
+test('cambiar de sala revoca en servidor el token anterior y conserva el nuevo', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const original = await connect(url); clients.push(original);
+  const roomA = await ack(original, 'room:create', { name: 'A' });
+  original.disconnect();
+  const recovered = await connect(url); clients.push(recovered);
+  const recoveredA = await ack(recovered, 'room:rejoin', { code: roomA.state.code, participantId: roomA.participantId, reconnectToken: roomA.reconnectToken });
+  const roomB = await ack(recovered, 'room:create', { name: 'B' });
+  assert.equal(roomB.ok, true);
+  const attacker = await connect(url); clients.push(attacker);
+  assert.equal((await ack(attacker, 'room:rejoin', { code: roomA.state.code, participantId: roomA.participantId, reconnectToken: recoveredA.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
+  recovered.disconnect();
+  const recoveredB = await connect(url); clients.push(recoveredB);
+  assert.equal((await ack(recoveredB, 'room:rejoin', { code: roomB.state.code, participantId: roomB.participantId, reconnectToken: roomB.reconnectToken })).ok, true);
+
+  const targetHost = await connect(url); const joiningSource = await connect(url); clients.push(targetHost, joiningSource);
+  const target = await ack(targetHost, 'room:create', { name: 'Destino' });
+  const source = await ack(joiningSource, 'room:create', { name: 'Origen' });
+  const joined = await ack(joiningSource, 'room:join', { code: target.state.code, name: 'Cambio', role: 'jugador' });
+  assert.equal(joined.ok, true);
+  const oldReplay = await connect(url); clients.push(oldReplay);
+  assert.equal((await ack(oldReplay, 'room:rejoin', { code: source.state.code, participantId: source.participantId, reconnectToken: source.reconnectToken })).error, 'No se pudo recuperar tu sesión.');
+});
+
+test('recargar al anfitrión durante Ronda 0 conserva sesión, tutorial y temporizador', async t => {
+  const tutorial = [{ points: 0, q: 'Práctica', options: ['A', 'B'], correct: 0 }];
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const host = await connect(url); const player = await connect(url); clients.push(host, player);
+  const created = await ack(host, 'room:create', { name: 'A' }); const code = created.state.code;
+  const joined = await ack(player, 'room:join', { code, name: 'B', role: 'jugador' });
+  await ack(host, 'category:select', { categoryKey: 'demo' });
+  const before = rooms.get(code).activeQuestion.endsAt;
+  host.disconnect();
+  const hostReloaded = await connect(url); clients.push(hostReloaded);
+  const recovered = await ack(hostReloaded, 'room:rejoin', { code, participantId: created.participantId, reconnectToken: created.reconnectToken });
+  assert.equal(recovered.isHost, true);
+  assert.equal(recovered.state.tutorial.status, 'playing');
+  assert.equal(recovered.state.activeQuestion.endsAt, before);
+  assert.equal(recovered.state.players.length, 2);
+  assert.equal((await ack(hostReloaded, 'category:select', { categoryKey: 'demo' })).error, 'Solo el anfitrión puede elegir una categoría disponible.');
+
+  player.disconnect();
+  const playerReloaded = await connect(url); clients.push(playerReloaded);
+  const playerRecovered = await ack(playerReloaded, 'room:rejoin', { code, participantId: joined.participantId, reconnectToken: joined.reconnectToken });
+  assert.equal(playerRecovered.isHost, false);
+  assert.equal(playerRecovered.state.activeQuestion.endsAt, before);
+  assert.equal(playerRecovered.state.players.length, 2);
+  assert.equal(JSON.stringify(playerRecovered).includes('correct'), false);
 });
 
 test('Ronda 0 se sincroniza, rechaza eventos atrasados y deja lista la competencia', async t => {
@@ -70,9 +167,9 @@ test('Ronda 0 se sincroniza, rechaza eventos atrasados y deja lista la competenc
   const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
   const a = await connect(url); const b = await connect(url); const spectator = await connect(url); clients.push(a, b, spectator);
-  await ack(a, 'room:create', { code: 'TUTOR', name: 'A' });
-  await ack(b, 'room:join', { code: 'TUTOR', name: 'B', role: 'jugador' });
-  await ack(spectator, 'room:join', { code: 'TUTOR', name: 'S', role: 'espectador' });
+  const created = await ack(a, 'room:create', { name: 'A' }); const code = created.state.code;
+  await ack(b, 'room:join', { code, name: 'B', role: 'jugador' });
+  await ack(spectator, 'room:join', { code, name: 'S', role: 'espectador' });
   const opened = once(spectator, 'question:opened'); await ack(a, 'category:select', { categoryKey: 'demo' });
   const first = await opened; assert.equal(first.tutorial, true); assert.equal(JSON.stringify(first).includes('correct'), false);
   const passedEvent = once(spectator, 'question:passed'); await ack(a, 'answer:submit', { answer: 1, questionId: first.id });
@@ -84,5 +181,31 @@ test('Ronda 0 se sincroniza, rechaza eventos atrasados y deja lista la competenc
   await ack(b, 'answer:submit', { answer: 1, questionId: second.id });
   const official = await ack(a, 'tutorial:begin-official', {});
   assert.equal(official.ok, true);
-  const room = rooms.get('TUTOR'); assert.equal(room.tutorial, null); assert.equal(room.players.every(player => player.score === 0), true);
+  const room = rooms.get(code); assert.equal(room.tutorial, null); assert.equal(room.players.every(player => player.score === 0), true);
+});
+
+test('Socket.IO rechaza payloads malformados y aplica límites sin detener el servidor', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [], limits: { maxRooms: 1, maxPlayers: 1, maxEventsPerWindow: 30 } });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+  const host = await connect(url); const other = await connect(url); clients.push(host, other);
+  for (const event of ['room:create', 'room:join', 'room:rejoin', 'category:select', 'team:begin', 'team:answer', 'tutorial:advance', 'tutorial:begin-official', 'question:select', 'answer:submit']) {
+    const response = await ack(host, event, null);
+    assert.equal(typeof response.error, 'string');
+  }
+  const created = await ack(host, 'room:create', { name: 'A' }); const code = created.state.code;
+  assert.match(code, /^SABELO-[A-Z2-9]{8}$/);
+  assert.equal((await ack(other, 'room:create', { name: 'B' })).error, 'No se pueden crear más salas en este momento.');
+  assert.equal((await ack(other, 'room:join', { code, name: 'B', role: 'jugador' })).error, 'La sala alcanzó el máximo de jugadores.');
+  assert.equal((await ack(host, 'category:select', { categoryKey: 'demo', isHost: true })).error, 'Categoría inválida.');
+  assert.equal(rooms.size, 1);
+});
+
+test('limpia salas abandonadas después del período de recuperación', () => {
+  const { rooms, cleanExpiredRooms } = createTriviaServer({ trivia, tutorial: [], limits: { roomIdleMs: 10 } });
+  const room = require('../lib/game-room').createRoom({ code: 'SABELO-ABCDEFGH', hostSocketId: 'socket', hostName: 'A' });
+  room.emptySince = Date.now() - 11; rooms.set(room.code, room);
+  cleanExpiredRooms();
+  assert.equal(rooms.has(room.code), false);
 });

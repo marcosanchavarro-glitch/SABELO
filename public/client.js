@@ -13,6 +13,20 @@ let currentTeamQuestion = null;
 let teamSetupIsTest = false;
 let reboundNotice = false;
 let currentQuestionId = null;
+let identityRequest = 0;
+
+const categoryIcons = {
+  cultura: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22"/><path d="M10 32h44M32 10c7 7 10 15 10 22s-3 15-10 22c-7-7-10-15-10-22s3-15 10-22Z"/></svg>',
+  biblia: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 16c9-5 18-3 22 3v31c-6-6-14-7-22-3V16Zm44 0c-9-5-18-3-22 3v31c6-6 14-7 22-3V16Z"/><path d="M17 25h9m21 0h-9M17 33h9m21 0h-9"/></svg>',
+  peliculas: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 23h40v29H12zM12 14h40v9H12zM20 14l7 9m8-9 7 9"/><path d="M23 34h18"/></svg>',
+  musica: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M42 13v31"/><path d="M42 14 24 19v28"/><circle cx="18" cy="48" r="7"/><circle cx="36" cy="44" r="7"/></svg>',
+  deportes: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="21"/><path d="m17 19 12 9-4 14m22-23-12 9 4 14m-17 8 10-8 10 8"/></svg>',
+  argentina: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 18h40v28H12z"/><path d="M12 27h40"/><circle cx="32" cy="32" r="5"/></svg>',
+  tecnologia: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="13" width="36" height="38" rx="3"/><path d="M25 56h14M32 51v5M22 23h20M22 31h13"/></svg>',
+  ciencia_nat: '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="32" rx="23" ry="10"/><ellipse cx="32" cy="32" rx="23" ry="10" transform="rotate(60 32 32)"/><ellipse cx="32" cy="32" rx="23" ry="10" transform="rotate(120 32 32)"/><circle cx="32" cy="32" r="4"/></svg>',
+  random: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 16h32v32H16z"/><circle cx="25" cy="25" r="3"/><circle cx="39" cy="25" r="3"/><circle cx="25" cy="39" r="3"/><circle cx="39" cy="39" r="3"/></svg>'
+};
+function displayTitle(value) { return String(value).replace(/^[^\p{L}\p{N}]+/u, '').trim(); }
 
 function changeScreen(id) {
   document.querySelectorAll('.screen').forEach(screen => screen.classList.toggle('active', screen.id === id));
@@ -21,6 +35,12 @@ function notifyError(message) { window.alert(message); }
 function escapeHtml(value) { const node = document.createElement('span'); node.textContent = value; return node.innerHTML; }
 function session() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } }
 function saveSession(data) { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); }
+function sameSession(left, right) {
+  return Boolean(left && right
+    && left.code === right.code
+    && left.participantId === right.participantId
+    && left.reconnectToken === right.reconnectToken);
+}
 
 function seleccionarRol(role) {
   playerRole = role;
@@ -44,37 +64,48 @@ function mostrarOpcionSala(action) {
   roomAction = action;
   const input = document.getElementById('input-room');
   document.getElementById('room-action-container').style.display = 'block';
-  document.getElementById('room-input-label').textContent = action === 'crear' ? 'Código para la nueva sala' : 'Código de sala existente';
+  document.getElementById('room-input-label').textContent = action === 'crear' ? 'Código seguro (se genera al crear la sala)' : 'Código de sala existente';
   document.getElementById('btn-room-action').textContent = action === 'crear' ? 'Crear sala' : 'Unirme';
-  input.value = action === 'crear' ? `TRIVIA-${Math.floor(1000 + Math.random() * 9000)}` : '';
+  input.value = '';
+  input.disabled = action === 'crear';
 }
 
-function acceptRoom(response, code) {
+function acceptRoom(response, code, requestId) {
+  if (requestId !== identityRequest) return;
   if (response.error) return notifyError(response.error);
-  isHost = response.isHost;
+  isHost = Boolean(response.isHost);
   roomState = response.state;
-  saveSession({ code, participantId: response.participantId, reconnectToken: response.reconnectToken });
+  const actualCode = response.state?.code || code;
+  saveSession({ code: actualCode, participantId: response.participantId, reconnectToken: response.reconnectToken });
   const participant = roomState.players.find(player => player.id === response.participantId) || roomState.spectators.find(item => item.id === response.participantId);
   if (participant) playerName = participant.name;
+  document.body.dataset.role = participant?.role || '';
   document.getElementById('lbl-username').textContent = playerName;
-  document.getElementById('lbl-room').textContent = code;
+  document.getElementById('lbl-role').textContent = isHost ? 'Anfitrión' : (participant ? (participant.role === 'espectador' ? 'Espectador' : 'Jugador') : 'Participante');
+  document.getElementById('lbl-room').textContent = actualCode;
   document.getElementById('header-user-info').style.display = 'flex';
   renderState();
 }
 
 function procesarIngresoSala() {
   const code = document.getElementById('input-room').value.trim().toUpperCase();
-  if (!code) return notifyError('Ingresá un código de sala válido.');
   const event = roomAction === 'crear' ? 'room:create' : 'room:join';
-  socket.emit(event, { code, name: playerName, role: playerRole }, response => acceptRoom(response, code));
+  if (event === 'room:join' && !code) return notifyError('Ingresá un código de sala válido.');
+  const requestId = ++identityRequest;
+  const payload = event === 'room:create' ? { name: playerName } : { code, name: playerName, role: playerRole };
+  socket.emit(event, payload, response => acceptRoom(response, code, requestId));
 }
 
 function restoreSession() {
   const saved = session();
   if (!saved) return;
+  const requestId = identityRequest;
   socket.emit('room:rejoin', saved, response => {
+    // Una creación/unión iniciada después de la restauración siempre prevalece.
+    // Así una respuesta atrasada no puede convertir al nuevo anfitrión en otra sesión.
+    if (requestId !== identityRequest || !sameSession(session(), saved)) return;
     if (response.error) return localStorage.removeItem(SESSION_KEY);
-    acceptRoom(response, saved.code);
+    acceptRoom(response, saved.code, requestId);
   });
 }
 
@@ -88,6 +119,7 @@ socket.on('team:turn', payload => { currentTeamQuestion = payload; if (!transiti
 socket.on('team:result', result => showTeamResult(result));
 socket.on('team:finished', duel => renderTeamFinished(duel));
 socket.on('tutorial:step-complete', () => { /* el estado público siguiente determina la pantalla de espera */ });
+socket.on('room:closed', () => { localStorage.removeItem(SESSION_KEY); notifyError('La sala fue cerrada por el anfitrión.'); changeScreen('screen-home'); });
 
 function ownPlayer() { return roomState?.players.find(player => player.id === session()?.participantId); }
 function turnPlayer() { return roomState?.players.find(player => player.id === roomState.turnPlayerId); }
@@ -115,17 +147,17 @@ function renderCategories() {
   container.append(note);
   Object.entries(roomState.catalog).forEach(([key, category]) => {
     const card = document.createElement('button'); card.className = 'category-card';
-    card.innerHTML = `<h3>${category.title}</h3><p>6 subcategorías · 100 a 500 puntos</p>`;
+    card.innerHTML = `<span class="category-icon">${categoryIcons[key] || categoryIcons.random}</span><h3>${escapeHtml(displayTitle(category.title))}</h3><p>Subcategorías · tablero de puntajes</p>`;
     card.disabled = !isHost;
     card.onclick = () => socket.emit('category:select', { categoryKey: key }, reportError);
     container.append(card);
   });
   if (isHost) {
     const duel = document.createElement('button'); duel.className = 'category-card';
-    duel.innerHTML = '<h3>⚔️ Duelo de Equipos</h3><p>Trivia bíblica · 10 rondas · 30 segundos por turno</p>';
+    duel.innerHTML = `<span class="category-icon">${categoryIcons.deportes}</span><h3>Duelo de equipos</h3><p>Trivia bíblica · 10 rondas · 30 segundos por turno</p>`;
     duel.onclick = () => abrirConfiguracionDuelo(false); container.append(duel);
     const practice = document.createElement('button'); practice.className = 'category-card';
-    practice.innerHTML = '<h3>🧪 Partida de prueba</h3><p>Probá equipos, turnos y sincronización sin historial competitivo.</p>';
+    practice.innerHTML = `<span class="category-icon">${categoryIcons.ciencia_nat}</span><h3>Partida de prueba</h3><p>Probá equipos, turnos y sincronización sin historial competitivo.</p>`;
     practice.onclick = () => abrirConfiguracionDuelo(true); container.append(practice);
   }
   changeScreen('screen-categories');
@@ -170,7 +202,7 @@ function renderTurnStatus() {
 function renderBoard() {
   const category = roomState.catalog[roomState.categoryKey];
   if (!category) return;
-  document.getElementById('active-category-title').textContent = category.title;
+  document.getElementById('active-category-title').textContent = displayTitle(category.title);
   document.getElementById('btn-exit-match').style.display = isHost ? '' : 'none';
   renderTurnStatus();
   const entries = Object.entries(category.subcategories);
@@ -198,9 +230,10 @@ function renderQuestion(payload) {
   currentQuestionId = payload.id;
   const isTutorial = payload.tutorial;
   const category = !isTutorial && roomState.catalog[payload.categoryKey]; const subcategory = category?.subcategories[payload.subKey];
-  document.getElementById('q-category').textContent = isTutorial ? 'RONDA 0 · TUTORIAL' : `${category.title} › ${subcategory.title}`;
+  document.getElementById('q-category').textContent = isTutorial ? 'RONDA 0 · TUTORIAL' : `${displayTitle(category.title)} › ${subcategory.title}`;
   document.getElementById('q-points').textContent = isTutorial ? 'Práctica · 0 pts' : `Valor: ${payload.question.points} pts`;
   document.getElementById('q-text').textContent = payload.question.q;
+  document.getElementById('broadcast-scoreboard').innerHTML = roomState.players.map(player => `<span class="broadcast-score ${player.id === roomState.turnPlayerId ? 'is-active' : ''}">${escapeHtml(player.name)} <b>${player.score}</b></span>`).join('');
   const turn = turnPlayer();
   const rebound = reboundNotice ? '¡REBOTE! ' : '';
   reboundNotice = false;
@@ -257,7 +290,7 @@ function startTimer(endsAt, targetId = 'timer') {
 function participantName(id) { return roomState.players.find(player => player.id === id)?.name || 'Participante'; }
 function renderTeamTurn() {
   const payload = currentTeamQuestion; const duel = roomState?.teamDuel || payload?.duel;
-  if (!payload || !duel || duel.status !== 'playing') return;
+  if (!payload || !duel || !['playing', 'tutorial'].includes(duel.status)) return;
   const active = duel.activeTurn; const teamInfo = duel.teams[active.teamKey]; const responder = participantName(active.responderId);
   document.getElementById('team-test-badge').hidden = !(duel.isTest || active.tutorial);
   document.getElementById('team-test-badge').textContent = active.tutorial ? 'RONDA 0 · TUTORIAL' : 'MODO PRUEBA';
@@ -276,7 +309,7 @@ function showTeamResult(result) {
   const base = result.status === 'correct' ? 'Respuesta registrada: +100 puntos para el equipo.' : result.status === 'timeout' ? 'Tiempo agotado. Sin puntos.' : 'Respuesta incorrecta. Sin puntos.';
   document.getElementById('team-turn-message').textContent = result.rebound ? `${base} ¡REBOTE! El otro equipo responde ahora.` : base;
   clearInterval(timerInterval); transitionPending = true;
-  window.setTimeout(() => { transitionPending = false; if (roomState?.teamDuel?.status === 'playing') renderTeamTurn(); }, 1100);
+  window.setTimeout(() => { transitionPending = false; if (['playing', 'tutorial'].includes(roomState?.teamDuel?.status)) renderTeamTurn(); }, 1100);
 }
 function renderTeamFinished(duel) {
   clearInterval(timerInterval); currentTeamQuestion = null;
@@ -291,7 +324,7 @@ function renderPodium() {
   clearInterval(timerInterval);
   const leaders = [...roomState.players].sort((a, b) => b.score - a.score).slice(0, 3);
   const medals = ['🥇', '🥈', '🥉'];
-  document.getElementById('final-message').innerHTML = `<strong>Podio de ${roomState.catalog[roomState.categoryKey].title}</strong><br><br>${leaders.map((player, index) => `${medals[index]} ${escapeHtml(player.name)} — ${player.score} pts`).join('<br>')}`;
+  document.getElementById('final-message').innerHTML = `<strong>Podio de ${escapeHtml(displayTitle(roomState.catalog[roomState.categoryKey].title))}</strong><br><br>${leaders.map((player, index) => `${medals[index]} ${escapeHtml(player.name)} — ${player.score} pts`).join('<br>')}`;
   document.querySelector('#screen-gameover .btn-primary').style.display = isHost ? '' : 'none';
   changeScreen('screen-gameover');
 }
