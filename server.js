@@ -279,6 +279,16 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       callback({ ok: true });
     });
 
+    receive(socket, 'room:close', (payload, callback) => {
+      if (!hasOnly(payload, [])) return callback({ error: 'Datos de la solicitud inválidos.' });
+      const { room, actor } = getRoomAndActor(socket);
+      if (!room || !actor || actor.id !== room.hostId || room.mode !== 'teams') return callback({ error: 'Solo el anfitrión puede terminar esta sala de equipos.' });
+      clearTimeout(room.timer);
+      rooms.delete(room.code);
+      io.to(room.code).emit('room:closed');
+      callback({ ok: true });
+    });
+
     receive(socket, 'category:select', (payload, callback) => {
       if (!hasOnly(payload, ['categoryKey']) || !text(payload.categoryKey, 40)) return callback({ error: 'Categoría inválida.' });
       const categoryKey = payload.categoryKey;

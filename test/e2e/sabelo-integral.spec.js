@@ -68,8 +68,10 @@ async function createFastContext(browser, viewport, resultDelay) {
         };
       }
     });
-    const nativeSetTimeout = window.setTimeout.bind(window);
-    window.setTimeout = (callback, delay, ...args) => nativeSetTimeout(callback, delay >= 1_000 && delay <= 1_500 ? delayForResult : delay, ...args);
+    if (Number.isFinite(delayForResult)) {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      window.setTimeout = (callback, delay, ...args) => nativeSetTimeout(callback, delay >= 1_000 && delay <= 2_000 ? delayForResult : delay, ...args);
+    }
   }, resultDelay);
   return context;
 }
@@ -119,6 +121,9 @@ async function playWrongIndividual(host, player) {
 }
 
 async function selectIndividualQuestion(host, player) {
+  // Tras el resultado el cliente conserva la placa brevemente. Esperar al
+  // tablero real evita buscar casillas mientras la transición aún está activa.
+  await expect(host.locator('#screen-subcategories')).toHaveClass(/active/, { timeout: 4_000 });
   for (let boardPage = 0; boardPage < 2; boardPage += 1) {
     for (const page of [host, player]) {
       const tile = page.locator('button.board-tile:not([disabled])').first();
@@ -199,6 +204,7 @@ test('partida integral: tres sesiones aisladas, tutorial, rebotes y final de equ
   await expect(spectator.locator('#screen-team-question')).toHaveClass(/active/);
   await expect(spectator.locator('#team-test-badge')).toContainText('RONDA 0');
   await expect(spectator.locator('#spectator-broadcast')).toContainText('PRÁCTICA SIN PUNTUACIÓN');
+  await expect(host.locator('#team-turn-heading')).toContainText('ES TU TURNO');
   await spectator.waitForTimeout(380);
   await spectator.screenshot({ path: testInfo.outputPath('04-ronda-0.png'), fullPage: true });
 
@@ -210,6 +216,12 @@ test('partida integral: tres sesiones aisladas, tutorial, rebotes y final de equ
   await spectator.waitForTimeout(380);
   await spectator.screenshot({ path: testInfo.outputPath('05-rebote.png'), fullPage: true });
   await spectator.waitForTimeout(550);
+  await expect(spectator.locator('#spectator-broadcast')).toHaveClass(/team-red-turn/);
+  await expect(player.locator('#team-turn-heading')).toContainText('ES TU TURNO');
+  await playWrongAttempt(host, player);
+  await expect(host.locator('#tutorial-action')).toBeVisible({ timeout: 5_000 });
+  await host.locator('#tutorial-action').click();
+  await playWrongAttempt(host, player);
   await playWrongAttempt(host, player);
   await expect(host.locator('#tutorial-action')).toBeVisible({ timeout: 5_000 });
   await host.locator('#tutorial-action').click();
@@ -242,9 +254,11 @@ test('partida integral: tres sesiones aisladas, tutorial, rebotes y final de equ
 });
 
 test('modo individual: tutorial y podio final en pantalla de espectador', async ({ browser }, testInfo) => {
-  const hostContext = await createFastContext(browser, { width: 390, height: 844 }, 25);
-  const playerContext = await createFastContext(browser, { width: 390, height: 844 }, 25);
-  const spectatorContext = await createFastContext(browser, { width: 1440, height: 810 }, 25);
+  // No se altera setTimeout en este flujo: Socket.IO debe conservar sus propios
+  // temporizadores al verificar una sesión de espectador separada.
+  const hostContext = await createFastContext(browser, { width: 390, height: 844 });
+  const playerContext = await createFastContext(browser, { width: 390, height: 844 });
+  const spectatorContext = await createFastContext(browser, { width: 1440, height: 810 });
   const host = await createPlayerPage(hostContext, 'Individual A');
   await host.getByRole('button', { name: 'Crear sala' }).click();
   await host.locator('#btn-create-config').click();

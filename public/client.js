@@ -23,6 +23,7 @@ let restoreTimeout = null;
 let roomCreateConfig = { mode: 'individual', responseMode: null };
 let boardPage = 0;
 const BOARD_PAGE_SIZE = 6;
+const TEAM_SCENE_TRANSITION_MS = 1_800;
 const flowTimings = [];
 
 const categoryIcons = {
@@ -70,6 +71,7 @@ function renderSpectatorBroadcast(screenId = '') {
   const footer = document.getElementById('broadcast-footer');
   const round = document.getElementById('broadcast-round');
   const duel = roomState.teamDuel;
+  broadcast.classList.toggle('team-red-turn', Boolean(spectator && duel?.activeTurn?.teamKey === 'red'));
   const active = duel?.activeTurn;
   const question = currentBroadcastQuestion?.question;
   const activePlayer = duel ? participantName(active?.responderId) : turnPlayer()?.name;
@@ -179,6 +181,7 @@ function resetToIdentity(message = '') {
   roomState = null; roomStateVersion = 0; currentTeamQuestion = null; pendingQuestion = null; isHost = false; boardPage = 0; hideLaunchFeedback();
   localStorage.removeItem(SESSION_KEY);
   document.getElementById('header-user-info').style.display = 'none';
+  document.getElementById('room-session-actions').hidden = true;
   changeScreen('screen-identity');
   if (message) notifyError(message);
 }
@@ -237,6 +240,15 @@ function syncIdentityFromState(participantId = savedParticipantId()) {
     document.getElementById('lbl-username').textContent = participant.name;
   }
   document.getElementById('lbl-role').textContent = isHost ? 'Anfitrión' : (participantRole === 'espectador' ? 'Espectador' : 'Jugador');
+}
+function updateRoomSessionActions() {
+  const inTeamRoom = roomState?.mode === 'teams';
+  const actions = document.getElementById('room-session-actions');
+  const leave = document.getElementById('btn-leave-room');
+  const close = document.getElementById('btn-close-team-room');
+  actions.hidden = !inTeamRoom;
+  leave.hidden = !inTeamRoom || isHost;
+  close.hidden = !inTeamRoom || !isHost;
 }
 
 function seleccionarRol(role) {
@@ -373,7 +385,11 @@ socket.on('team:turn', payload => { currentTeamQuestion = payload; if (!transiti
 socket.on('team:result', result => showTeamResult(result));
 socket.on('team:finished', duel => renderTeamFinished(duel));
 socket.on('tutorial:step-complete', () => { /* el estado público siguiente determina la pantalla de espera */ });
-socket.on('room:closed', () => resetToIdentity('La sala fue cerrada por el anfitrión.'));
+socket.on('room:closed', () => {
+  // El anfitrión también recibe este evento después de confirmar el cierre.
+  // Si ya volvió al inicio por el acuse, no repetimos el aviso.
+  if (roomState) resetToIdentity('La sala fue cerrada por el anfitrión.');
+});
 
 function ownPlayer() { return roomState?.players.find(player => player.id === session()?.participantId); }
 function turnPlayer() { return roomState?.players.find(player => player.id === roomState.turnPlayerId); }
@@ -381,6 +397,7 @@ function isMyTurn() { return roomState?.turnPlayerId === session()?.participantI
 
 function renderState() {
   if (!roomState) return;
+  updateRoomSessionActions();
   const own = ownPlayer();
   document.getElementById('current-score').textContent = own ? own.score : '—';
   if (transitionPending) return;
@@ -691,6 +708,11 @@ function renderTeamTurn() {
   document.getElementById('team-active-label').textContent = `${teamInfo.name.toUpperCase()} · ${responder}`;
   document.getElementById('team-scores').innerHTML = ['blue', 'red'].map(key => `<div class="team-score ${key} ${key === active.teamKey ? 'active' : ''}">${duel.teams[key].name}: ${duel.teams[key].score}</div>`).join('');
   const mine = session()?.participantId === active.responderId;
+  const spotlight = document.getElementById('team-turn-spotlight');
+  spotlight.dataset.team = active.teamKey;
+  spotlight.classList.toggle('is-mine', mine);
+  document.getElementById('team-turn-heading').textContent = mine ? `¡ES TU TURNO, ${responder.toUpperCase()}!` : `TURNO DE ${responder.toUpperCase()}`;
+  document.getElementById('team-turn-subtitle').textContent = `${teamInfo.name} · ${active.tutorial ? 'Ronda 0 · práctica sin puntos' : 'Respondé desde este dispositivo'}`;
   document.getElementById('team-turn-message').textContent = mine ? '¡ES TU TURNO! Enviá la respuesta del equipo.' : `Turno de ${responder} · ${teamInfo.name}.`;
   document.getElementById('team-q-text').textContent = payload.question.q;
   const options = document.getElementById('team-options-container'); options.replaceChildren();
@@ -716,7 +738,7 @@ function showTeamResult(result) {
     // la pantalla de avance, no intentar renderizar un turno inexistente.
     if (roomState?.teamDuel?.status === 'finished') return renderTeamFinished(roomState.teamDuel);
     renderState();
-  }, 1100);
+  }, TEAM_SCENE_TRANSITION_MS);
 }
 function renderTeamFinished(duel) {
   clearInterval(timerInterval); currentTeamQuestion = null;
@@ -752,3 +774,17 @@ function renderPodium() {
 function reportError(response) { if (response?.error) notifyError(response.error); }
 function volverACategorias() { socket.emit('match:reset', {}, reportError); }
 function reiniciarJuegoCompleto() { socket.emit('match:reset', {}, reportError); }
+function salirDeSala() {
+  if (isHost || roomState?.mode !== 'teams') return;
+  sendAction('room:leave', {}, {
+    label: 'Saliendo de la sala…', button: document.getElementById('btn-leave-room'),
+    onSuccess: () => resetToIdentity('Saliste de la sala.'), onError: reportError
+  });
+}
+function terminarSalaEquipos() {
+  if (!isHost || roomState?.mode !== 'teams') return;
+  sendAction('room:close', {}, {
+    label: 'Terminando sala…', button: document.getElementById('btn-close-team-room'),
+    onSuccess: () => { if (roomState) resetToIdentity('La sala fue terminada.'); }, onError: reportError
+  });
+}

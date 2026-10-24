@@ -20,6 +20,10 @@
                 <span class="room-code-slot"><small>CÓDIGO</small><strong id="lbl-room">SALA</strong><button type="button" class="copy-code-btn" data-copy-code onclick="copyRoomCode()" aria-label="Copiar código de sala"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copiar</span></button></span>
                 <div class="score-board">Tus puntos: <span id="current-score">0</span></div>
             </div>
+            <div id="room-session-actions" class="room-session-actions" hidden>
+                <button id="btn-leave-room" type="button" class="btn-secondary" onclick="salirDeSala()" hidden>Salir de la sala</button>
+                <button id="btn-close-team-room" type="button" class="btn-secondary danger-action" onclick="terminarSalaEquipos()" hidden>Terminar sala</button>
+            </div>
         </header>
         <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
 
@@ -195,6 +199,9 @@
             <div class="broadcast-topline"><span class="live-pill">EN VIVO</span><button type="button" class="btn-secondary team-end-match" data-team-end-match onclick="finalizarPartidaEquipos()" hidden>Finalizar partida</button></div>
             <div id="team-test-badge" class="test-badge" hidden>MODO PRUEBA</div>
             <div class="question-meta"><span id="team-progress">Ronda 1 de 10</span><span id="team-active-label" style="color: var(--accent); font-weight: bold;"></span></div>
+            <section id="team-turn-spotlight" class="team-turn-spotlight" aria-live="polite">
+                <p>AHORA JUEGA</p><h2 id="team-turn-heading">Esperando turno</h2><span id="team-turn-subtitle"></span>
+            </section>
             <div id="team-scores" class="team-scores"></div>
             <div id="team-timer" class="timer">Tiempo: 00:30</div>
             <p id="team-turn-message" class="question-turn-message"></p>

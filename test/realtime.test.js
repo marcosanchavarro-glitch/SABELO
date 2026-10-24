@@ -270,7 +270,7 @@ test('Socket.IO rechaza payloads malformados y aplica límites sin detener el se
   const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
   t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
   const host = await connect(url); const other = await connect(url); clients.push(host, other);
-  for (const event of ['room:create', 'room:join', 'room:rejoin', 'category:select', 'team:begin', 'team:answer', 'tutorial:advance', 'tutorial:begin-official', 'question:select', 'answer:submit']) {
+  for (const event of ['room:create', 'room:join', 'room:rejoin', 'room:leave', 'room:close', 'category:select', 'team:begin', 'team:answer', 'tutorial:advance', 'tutorial:begin-official', 'question:select', 'answer:submit']) {
     const response = await ack(host, event, null);
     assert.equal(typeof response.error, 'string');
   }
@@ -280,6 +280,22 @@ test('Socket.IO rechaza payloads malformados y aplica límites sin detener el se
   assert.equal((await ack(other, 'room:join', { code, name: 'B', role: 'jugador' })).error, 'La sala alcanzó el máximo de jugadores.');
   assert.equal((await ack(host, 'category:select', { categoryKey: 'demo', isHost: true })).error, 'Categoría inválida.');
   assert.equal(rooms.size, 1);
+});
+
+test('solo el anfitrión puede terminar una sala de equipos y los participantes reciben el cierre', async t => {
+  const { httpServer, io, rooms } = createTriviaServer({ trivia, tutorial: [] });
+  await new Promise(resolve => httpServer.listen(0, resolve));
+  const url = `http://127.0.0.1:${httpServer.address().port}`; const clients = [];
+  t.after(() => { clients.forEach(client => client.disconnect()); rooms.forEach(room => clearTimeout(room.timer)); io.close(); httpServer.close(); });
+
+  const host = await connect(url); const player = await connect(url); clients.push(host, player);
+  const created = await ack(host, 'room:create', { name: 'Host', mode: 'teams', responseMode: 'individual' });
+  await ack(player, 'room:join', { code: created.state.code, name: 'Jugadora', role: 'jugador' });
+  assert.equal((await ack(player, 'room:close', {})).error, 'Solo el anfitrión puede terminar esta sala de equipos.');
+  const closed = once(player, 'room:closed');
+  assert.equal((await ack(host, 'room:close', {})).ok, true);
+  await closed;
+  assert.equal(rooms.has(created.state.code), false);
 });
 
 test('limpia salas abandonadas después del período de recuperación', () => {

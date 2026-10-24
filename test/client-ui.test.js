@@ -10,6 +10,8 @@ test('la vista de equipos permite renderizar la Ronda 0', () => {
   assert.match(client, /roomState\.teamDuel\?\.status === 'playing'/);
   assert.match(client, /function showTeamResult[\s\S]*?transitionPending = false;[\s\S]*?renderState\(\);/);
   assert.match(client, /roomState\?\.teamDuel\?\.status === 'finished'[\s\S]*?renderTeamFinished/);
+  assert.match(client, /const TEAM_SCENE_TRANSITION_MS = 1_800/);
+  assert.match(client, /setTimeout\([\s\S]*?TEAM_SCENE_TRANSITION_MS/);
 });
 
 test('el cliente deriva el anfitrión del estado del servidor y protege los eventos de otra sala', () => {
@@ -66,6 +68,8 @@ test('la transmisión del espectador es una capa de solo lectura basada en estad
   assert.match(html, /id="broadcast-main"/);
   assert.match(css, /\.spectator-mode \.stage-frame \{ display: none;/);
   assert.match(css, /\.broadcast-crt/);
+  assert.match(client, /classList\.toggle\('team-red-turn'/);
+  assert.match(css, /\.spectator-broadcast\.team-red-turn \.broadcast-scene/);
 });
 
 test('el tablero pagina subcategorías en columnas independientes, no crea preguntas vacías y confirma acciones antes de abrirlas', () => {
@@ -93,4 +97,17 @@ test('el código de sala se copia sin exponer datos de sesión', () => {
   assert.match(client, /¡Código copiado!/);
   assert.doesNotMatch(client.match(/function copyRoomCode[\s\S]*?function resetToIdentity/)?.[0] || '', /reconnectToken|participantId/);
   assert.match(html, /data-copy-code/);
+});
+
+test('las salas por equipos ofrecen salida segura, cierre del anfitrión y un turno destacado', () => {
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'client.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+  assert.match(html, /id="btn-leave-room"/);
+  assert.match(html, /id="btn-close-team-room"/);
+  assert.match(html, /id="team-turn-spotlight"/);
+  assert.match(client, /function salirDeSala\(\)[\s\S]*?sendAction\('room:leave'/);
+  assert.match(client, /function terminarSalaEquipos\(\)[\s\S]*?sendAction\('room:close'/);
+  assert.match(client, /¡ES TU TURNO, \$\{responder\.toUpperCase\(\)\}!/);
+  assert.match(css, /\.team-turn-spotlight\[data-team="red"\]/);
 });

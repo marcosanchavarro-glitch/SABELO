@@ -6,5 +6,7 @@ module.exports = defineConfig({
   timeout: 120_000,
   retries: 0,
   reporter: [['list']],
-  use: { headless: true, screenshot: 'only-on-failure', video: 'off', trace: 'retain-on-failure' }
+  // Usa Chrome instalado en Windows: evita depender de una descarga efímera del
+  // navegador empaquetado de Playwright en entornos de escritorio aislados.
+  use: { channel: 'chrome', headless: true, screenshot: 'only-on-failure', video: 'off', trace: 'retain-on-failure' }
 });
