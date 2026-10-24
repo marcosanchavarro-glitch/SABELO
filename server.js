@@ -75,7 +75,11 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
   });
 
   const state = room => ({ ...game.publicState(room, trivia), teamDuel: team.publicDuel(room) });
-  const emitState = room => io.to(room.code).emit('room:state', state(room));
+  const emitState = room => {
+    room.stateVersion = (room.stateVersion || 0) + 1;
+    io.to(room.code).emit('room:state', state(room));
+  };
+  const publicQuestion = room => ({ ...game.publicQuestion(room.activeQuestion, trivia), stateVersion: room.stateVersion || 0 });
   const bindSocket = (socket, room, participant) => {
     // Un mismo socket solo puede representar una identidad/sala a la vez. Esto
     // evita que una restauración previa siga recibiendo eventos tras crear o
@@ -139,7 +143,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
     io.to(room.code).emit('answer:result', { playerId: player.id, playerName: player.name, status: 'timeout' });
     emitState(room);
     if (result.rebound) {
-      io.to(room.code).emit('question:passed', game.publicQuestion(result.activeQuestion, trivia));
+      io.to(room.code).emit('question:passed', publicQuestion(room));
       armTimer(room);
       return;
     }
@@ -210,7 +214,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       bindSocket(socket, room, participant);
       callback({ ok: true, isHost: room.hostId === participant.id, participantId: participant.id, reconnectToken: participant.token, state: state(room) });
       emitState(room);
-      if (room.activeQuestion) socket.emit('question:opened', game.publicQuestion(room.activeQuestion, trivia));
+      if (room.activeQuestion) socket.emit('question:opened', publicQuestion(room));
       if (['playing', 'tutorial'].includes(room.teamDuel?.status)) socket.emit('team:turn', { duel: team.publicDuel(room), question: team.publicQuestion(room, trivia) });
     });
 
@@ -251,7 +255,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       participant.socketId = socket.id; participant.connected = true; bindSocket(socket, room, participant);
       callback({ ok: true, isHost: room.hostId === participant.id, participantId: participant.id, reconnectToken: participant.token, state: state(room) });
       emitState(room);
-      if (room.activeQuestion) socket.emit('question:opened', game.publicQuestion(room.activeQuestion, trivia));
+      if (room.activeQuestion) socket.emit('question:opened', publicQuestion(room));
       if (['playing', 'tutorial'].includes(room.teamDuel?.status)) socket.emit('team:turn', { duel: team.publicDuel(room), question: team.publicQuestion(room, trivia) });
     });
 
@@ -279,7 +283,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       if (!room) return callback({ error: 'La sala ya no existe en el servidor.', code: 'ROOM_NOT_FOUND' });
       if (!actor || actor.id !== room.hostId || !game.selectCategory(room, categoryKey, trivia)) return callback({ error: 'Solo el anfitrión puede elegir una categoría disponible.' });
       const active = game.startTutorial(room, tutorial);
-      emitState(room); if (active) { socket.to(room.code).emit('question:opened', game.publicQuestion(active, trivia)); socket.emit('question:opened', game.publicQuestion(active, trivia)); armTimer(room); }
+      emitState(room); if (active) { io.to(room.code).emit('question:opened', publicQuestion(room)); armTimer(room); }
       callback({ ok: true });
     });
 
@@ -328,7 +332,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       else if (room.teamDuel?.tutorial?.status === 'awaiting-host') { active = team.advanceTutorial(room); mode = 'team'; }
       if (!active) return callback({ error: 'No hay una práctica pendiente para avanzar.' });
       emitState(room);
-      if (mode === 'team') { emitTeamTurn(room); armTeamTimer(room); } else { io.to(room.code).emit('question:opened', game.publicQuestion(active, trivia)); armTimer(room); }
+      if (mode === 'team') { emitTeamTurn(room); armTeamTimer(room); } else { io.to(room.code).emit('question:opened', publicQuestion(room)); armTimer(room); }
       callback({ ok: true });
     });
 
@@ -349,7 +353,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
       const { room, actor } = getRoomAndActor(socket);
       const activeQuestion = room && game.selectQuestion(room, actor.id, subKey, Number(qIndex), trivia);
       if (!activeQuestion) return callback({ error: 'No podés seleccionar esta pregunta ahora.' });
-      armTimer(room); io.to(room.code).emit('question:opened', game.publicQuestion(activeQuestion, trivia)); emitState(room); callback({ ok: true });
+      emitState(room); armTimer(room); io.to(room.code).emit('question:opened', publicQuestion(room)); callback({ ok: true });
     });
 
     receive(socket, 'answer:submit', (payload, callback) => {
@@ -368,7 +372,7 @@ function createTriviaServer({ trivia = privateTrivia, tutorial = tutorialQuestio
         if (outcome.finished.tutorial) io.to(room.code).emit('tutorial:step-complete', { mode: 'individual', complete: Boolean(outcome.finished.tutorialComplete) });
         if (outcome.finished.finishedGame) io.to(room.code).emit('game:finished', { podium: game.podium(room) });
       } else {
-        armTimer(room); emitState(room); io.to(room.code).emit('question:passed', game.publicQuestion(outcome.activeQuestion, trivia));
+        emitState(room); armTimer(room); io.to(room.code).emit('question:passed', publicQuestion(room));
       }
       callback({ ok: true });
     });

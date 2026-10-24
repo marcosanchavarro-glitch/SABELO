@@ -218,6 +218,19 @@
         </div>
     </div>
 
+    <!-- Transmisión exclusiva para espectadores. Se completa únicamente con estado público. -->
+    <main id="spectator-broadcast" class="spectator-broadcast" hidden aria-live="polite">
+        <div class="broadcast-scene" aria-hidden="true"></div>
+        <div class="broadcast-crt" aria-hidden="true"></div>
+        <header class="broadcast-header">
+            <div class="broadcast-brand"><span>SABELO</span><small>EL CONCURSO ESTÁ EN EL AIRE</small></div>
+            <div class="broadcast-status"><span class="live-pill">EN VIVO</span><span id="broadcast-round">EN ESPERA</span></div>
+            <button class="broadcast-fullscreen" type="button" onclick="toggleBroadcastFullscreen()" aria-label="Alternar pantalla completa">Pantalla completa</button>
+        </header>
+        <section id="broadcast-main" class="broadcast-main" aria-label="Transmisión de la partida"></section>
+        <footer id="broadcast-footer" class="broadcast-footer" aria-label="Marcador"></footer>
+    </main>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>

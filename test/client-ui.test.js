@@ -6,7 +6,10 @@ const path = require('node:path');
 test('la vista de equipos permite renderizar la Ronda 0', () => {
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'client.js'), 'utf8');
   assert.match(client, /\['playing', 'tutorial'\]\.includes\(duel\.status\)/);
-  assert.match(client, /\['playing', 'tutorial'\]\.includes\(roomState\?\.teamDuel\?\.status\)/);
+  assert.match(client, /roomState\.teamDuel\?\.status === 'tutorial'/);
+  assert.match(client, /roomState\.teamDuel\?\.status === 'playing'/);
+  assert.match(client, /function showTeamResult[\s\S]*?transitionPending = false;[\s\S]*?renderState\(\);/);
+  assert.match(client, /roomState\?\.teamDuel\?\.status === 'finished'[\s\S]*?renderTeamFinished/);
 });
 
 test('el cliente deriva el anfitrión del estado del servidor y protege los eventos de otra sala', () => {
@@ -42,4 +45,22 @@ test('el cliente contiene la creación por modalidad, elección voluntaria de ba
   assert.match(html, /Elegí tu bando/);
   assert.match(html, /Unirme a Chicos/);
   assert.match(html, /Unirme a Chicas/);
+  assert.match(client, /let previousScore = null;/);
+  assert.match(client, /if \(player\.score !== previousScore\) currentRank = index \+ 1;/);
+});
+
+test('la transmisión del espectador es una capa de solo lectura basada en estado público', () => {
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'client.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+  assert.match(client, /function isSpectatorSession/);
+  assert.match(client, /function renderSpectatorBroadcast/);
+  assert.match(client, /function toggleBroadcastFullscreen/);
+  assert.match(client, /currentBroadcastQuestion/);
+  assert.match(client, /previousScore = null;[\s\S]*?return \{ \.\.\.player, rank \}/);
+  assert.doesNotMatch(client.match(/function renderSpectatorBroadcast[\s\S]*?function syncBroadcastTimer/)?.[0] || '', /correctIndex|\.correct\b/);
+  assert.match(html, /id="spectator-broadcast"/);
+  assert.match(html, /id="broadcast-main"/);
+  assert.match(css, /\.spectator-mode \.stage-frame \{ display: none;/);
+  assert.match(css, /\.broadcast-crt/);
 });

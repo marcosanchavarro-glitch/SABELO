@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
     "validate:bible": "node scripts/validate-bible-bank.js"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "body-parser": "1.20.9"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "socket.io-client": "^4.8.4"
   }
 }
