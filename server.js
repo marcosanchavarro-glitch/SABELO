@@ -24,7 +24,10 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function isPlainObject(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype; }
 function hasOnly(payload, keys) { return Object.keys(payload).every(key => keys.includes(key)); }
-function text(value, maxLength) { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength ? value.trim() : null; }
+function text(value, maxLength) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return normalized.length > 0 && normalized.length <= maxLength && /[\p{L}\p{N}]/u.test(normalized) ? normalized : null;
+}
 function roomCode(value) { const code = text(value, 20)?.toUpperCase(); return code && /^[A-Z0-9-]{6,20}$/.test(code) ? code : null; }
 function identifier(value) { return typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value) ? value : null; }
 function generateRoomCode() {

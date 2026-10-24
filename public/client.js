@@ -528,12 +528,16 @@ function iniciarDueloEquipos() {
   sendAction('team:begin', { responseMode, isTest: teamSetupIsTest, captains }, { label: 'Iniciando Ronda 0…', onSuccess: () => {}, onError: reportError });
 }
 
+function hasDisplayName(participant) { return typeof participant?.name === 'string' && /[\p{L}\p{N}]/u.test(participant.name); }
 function renderTurnStatus() {
   const turn = turnPlayer();
-  const label = turn ? `TURNO DE: ${turn.name}${isMyTurn() ? ' — ¡ES TU TURNO!' : ''}` : 'Esperando jugadores';
+  const label = hasDisplayName(turn)
+    ? `TURNO DE: ${turn.name}${isMyTurn() ? ' — ¡ES TU TURNO!' : ''}`
+    : roomState.turnPlayerId ? 'Sincronizando participante activo…' : 'Esperando jugadores';
   document.getElementById('turn-label').textContent = label;
-  document.getElementById('spectators-label').textContent = roomState.spectators.length ? roomState.spectators.map(item => item.name).join(', ') : 'Ninguno';
-  document.getElementById('players-scoreboard').innerHTML = roomState.players.map(player => `<span class="player-score ${player.id === roomState.turnPlayerId ? 'is-turn' : ''} ${!player.connected ? 'is-offline' : ''}">${escapeHtml(player.name)}: ${player.score}</span>`).join('');
+  document.getElementById('spectators-label').textContent = roomState.spectators.length ? roomState.spectators.filter(hasDisplayName).map(item => item.name).join(', ') || 'Sincronizando' : 'Ninguno';
+  const scoreboard = roomState.players.filter(hasDisplayName).map(player => `<span class="player-score ${player.id === roomState.turnPlayerId ? 'is-turn' : ''} ${!player.connected ? 'is-offline' : ''}">${escapeHtml(player.name)}: ${player.score}</span>`).join('');
+  document.getElementById('players-scoreboard').innerHTML = scoreboard || '<span class="player-score state-pending">Sincronizando participantes…</span>';
 }
 
 function renderBoard() {
@@ -552,21 +556,24 @@ function renderBoard() {
   const [previous, next] = controls.querySelectorAll('button');
   previous.onclick = () => { boardPage -= 1; renderBoard(); };
   next.onclick = () => { boardPage += 1; renderBoard(); };
-  const table = document.createElement('div'); table.className = 'jeopardy-board'; table.style.setProperty('--board-columns', pageEntries.length);
-  table.innerHTML = `<div class="corner">Puntos</div>${pageEntries.map(([, sub]) => `<div class="board-heading">${escapeHtml(sub.title)}</div>`).join('')}`;
-  points.forEach(pointsValue => {
-    table.insertAdjacentHTML('beforeend', `<div class="point-label">${pointsValue}</div>`);
-    pageEntries.forEach(([subKey, sub]) => {
+  const table = document.createElement('div'); table.className = 'jeopardy-board'; table.style.setProperty('--board-columns', pageEntries.length); table.style.setProperty('--board-rows', points.length);
+  pageEntries.forEach(([subKey, sub]) => {
+    const column = document.createElement('section'); column.className = 'board-column';
+    column.setAttribute('aria-label', `Subcategoría ${sub.title}`);
+    const heading = document.createElement('h3'); heading.className = 'board-heading'; heading.textContent = sub.title; column.append(heading);
+    points.forEach(pointsValue => {
       const qIndex = sub.questions.findIndex(question => question.points === pointsValue);
-      if (qIndex < 0) { const empty = document.createElement('div'); empty.className = 'board-tile board-empty'; empty.textContent = '—'; empty.setAttribute('aria-label', 'Sin pregunta para este puntaje'); table.append(empty); return; }
+      if (qIndex < 0) { const empty = document.createElement('div'); empty.className = 'board-tile board-empty'; empty.textContent = '—'; empty.setAttribute('aria-label', `${sub.title}: sin pregunta para ${pointsValue} puntos`); column.append(empty); return; }
       const used = roomState.usedQuestions.includes(`${roomState.categoryKey}:${subKey}:${qIndex}`);
       const button = document.createElement('button'); button.className = `board-tile ${used ? 'used' : ''}`;
       button.textContent = used ? 'JUGADA' : pointsValue;
       button.disabled = used || !isMyTurn() || Boolean(roomState.activeQuestion) || Boolean(pendingAction);
       button.title = used ? 'Pregunta consumida' : isMyTurn() ? 'Seleccionar pregunta' : 'Esperá tu turno';
+      button.setAttribute('aria-label', `${sub.title}: ${used ? 'pregunta de ' : ''}${pointsValue} puntos${used ? ', ya jugada' : ''}`);
       button.onclick = () => selectBoardQuestion(subKey, qIndex, button);
-      table.append(button);
+      column.append(button);
     });
+    table.append(column);
   });
   document.getElementById('subcategories-container').replaceChildren(controls, table);
   if (!roomState.activeQuestion) changeScreen('screen-subcategories');

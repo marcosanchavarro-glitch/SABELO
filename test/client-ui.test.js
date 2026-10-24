@@ -65,7 +65,7 @@ test('la transmisión del espectador es una capa de solo lectura basada en estad
   assert.match(css, /\.broadcast-crt/);
 });
 
-test('el tablero pagina subcategorías, no crea preguntas vacías y confirma acciones antes de abrirlas', () => {
+test('el tablero pagina subcategorías en columnas independientes, no crea preguntas vacías y confirma acciones antes de abrirlas', () => {
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'client.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
   assert.match(client, /const BOARD_PAGE_SIZE = 6/);
@@ -73,6 +73,11 @@ test('el tablero pagina subcategorías, no crea preguntas vacías y confirma acc
   assert.match(client, /if \(qIndex < 0\).*board-empty/);
   assert.match(client, /function selectBoardQuestion/);
   assert.match(client, /PREPARANDO PREGUNTA/);
+  assert.match(client, /column\.className = 'board-column'/);
+  assert.match(client, /table\.append\(column\)/);
+  assert.match(client, /function hasDisplayName/);
+  assert.match(css, /\.board-column \{ min-width: 0; display: grid;/);
+  assert.match(css, /\.game-launch-overlay\[hidden\] \{ display: none;/);
   assert.match(css, /repeat\(var\(--board-columns\), minmax\(0, 1fr\)\)/);
 });
 

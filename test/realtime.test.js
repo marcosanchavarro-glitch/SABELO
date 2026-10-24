@@ -75,6 +75,7 @@ test('el creador es anfitrión y los demás roles no pueden seleccionar categor�
 
   const host = await connect(url); const player = await connect(url); const spectator = await connect(url); clients.push(host, player, spectator);
   assert.equal((await ack(host, 'room:create', { name: 'Sin modalidad' })).error, 'Modalidad de sala inválida.');
+  assert.equal((await ack(host, 'room:create', { name: '-', mode: 'individual', responseMode: null })).error, 'Ingresá un alias válido.');
   const created = await ack(host, 'room:create', { name: 'Anfitrión', mode: 'individual', responseMode: null }); const code = created.state.code;
   await ack(player, 'room:join', { code, name: 'Jugador', role: 'jugador' });
   await ack(spectator, 'room:join', { code, name: 'Espectador', role: 'espectador' });
